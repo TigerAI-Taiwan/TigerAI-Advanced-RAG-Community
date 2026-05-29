@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TigerAI Advanced RAG — Community Edition</title>
+<meta name="description" content="Open-source RAG knowledge-base platform — the reference application for the OpenGenie AI Stack. Cited answers, bilingual UI, no code required.">
+<link rel="icon" href="logo.png">
+<style>
+:root{--ink:#1f2328;--mut:#57606a;--line:#e2e6ea;--blue:#0969da;--green:#1a7f37;--purple:#8957e5;--soft:#f6f8fa;--card:#fff}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:#fff;line-height:1.6}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+/* nav */
+nav{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:14px;height:62px}
+nav img{width:34px;height:34px;border-radius:8px}
+nav .nm{font-weight:700;font-size:16px}
+nav .sp{flex:1}
+nav .lnk{color:var(--mut);font-size:14px;margin-left:18px}
+nav .lnk:hover{color:var(--ink);text-decoration:none}
+@media(max-width:640px){nav .lnk.hide{display:none}}
+/* hero */
+.hero{background:linear-gradient(180deg,#f3f8ff 0%,#fff 60%);padding:62px 0 36px;text-align:center}
+.hero .badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:18px 0 8px}
+.hero .badge{font-size:12.5px;padding:4px 12px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--mut)}
+.hero .badge b{color:var(--ink)}
+.hero h1{font-size:42px;line-height:1.12;letter-spacing:-.5px;margin:8px 0}
+.hero h1 .g{color:var(--blue)}
+.hero .tag{font-size:18px;color:var(--mut);max-width:680px;margin:0 auto 6px}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:24px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:10px;font-size:15px;font-weight:600}
+.btn.p{background:var(--ink);color:#fff}
+.btn.p:hover{background:#000;text-decoration:none}
+.btn.s{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn.s:hover{border-color:var(--mut);text-decoration:none}
+.shot{margin:40px auto 0;max-width:920px}
+.shot img{width:100%;border:1px solid var(--line);border-radius:14px;box-shadow:0 16px 50px rgba(31,35,40,.14)}
+/* sections */
+section{padding:54px 0}
+section.alt{background:var(--soft);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+h2{font-size:28px;letter-spacing:-.3px;margin-bottom:10px}
+.lead{color:var(--mut);font-size:16px;max-width:760px;margin-bottom:26px}
+/* stack diagram */
+.stackd{display:flex;flex-direction:column;gap:0;max-width:680px}
+.layer{border:1px solid var(--line);padding:16px 20px;background:#fff}
+.layer.top{border-radius:12px 12px 0 0;border-bottom:none;background:#f0f6ff}
+.layer.bot{border-radius:0 0 12px 12px;background:#fff}
+.layer .t{font-weight:700;font-size:15px}
+.layer .s{color:var(--mut);font-size:13.5px;margin-top:3px}
+.layer .tag2{font-size:11.5px;color:var(--blue);font-weight:600}
+/* feature grid */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.f{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+section.alt .f{background:#fff}
+.f .ic{font-size:22px}
+.f h3{font-size:16px;margin:8px 0 4px}
+.f p{color:var(--mut);font-size:14px}
+/* quick start */
+.steps{counter-reset:s;display:flex;flex-direction:column;gap:14px;max-width:780px}
+.step{display:flex;gap:14px;align-items:flex-start}
+.step .n{flex:0 0 auto;width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
+.step .c{font-size:15px}
+.step .c b{color:var(--ink)}
+.step .c .m{color:var(--mut);font-size:14px}
+pre{background:#0d1117;color:#e6edf3;border-radius:10px;padding:16px 18px;overflow:auto;font-size:13px;line-height:1.7;margin-top:18px}
+pre .c{color:#7d8590}
+.note{margin-top:18px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:10px;padding:14px 18px;font-size:14px;color:var(--mut)}
+.note code{background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:13px;color:var(--ink)}
+/* editions table */
+table{width:100%;border-collapse:collapse;font-size:14.5px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{padding:13px 16px;text-align:left;border-bottom:1px solid var(--line)}
+th{background:var(--soft);font-size:13px;color:var(--mut)}
+tr:last-child td{border-bottom:none}
+td b{color:var(--green)}
+/* footer */
+footer{padding:40px 0;border-top:1px solid var(--line);color:var(--mut);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center}
+footer .sp{flex:1}
+.zh{color:var(--mut);font-size:14.5px;max-width:820px}
+.zh b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <img src="logo.png" alt="">
+  <span class="nm">TigerAI Advanced RAG</span>
+  <span class="sp"></span>
+  <a class="lnk hide" href="#how">Stack</a>
+  <a class="lnk hide" href="#features">Features</a>
+  <a class="lnk" href="#quickstart">Quick Start</a>
+  <a class="lnk" href="https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community">GitHub</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div class="badges">
+    <span class="badge"><b>Apache-2.0</b></span>
+    <span class="badge">Community · <b>Free</b></span>
+    <span class="badge">Image <b>amd64 | arm64</b></span>
+    <span class="badge">Reference app for <b>OpenGenie</b></span>
+  </div>
+  <h1>Turn your documents into a<br><span class="g">cited, ask-anything</span> knowledge base</h1>
+  <p class="tag">Open-source RAG platform — and the reference application for the
+  <a href="https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack">OpenGenie AI Stack</a>.
+  Upload PDFs, chat with downloadable source citations. Bilingual UI, no code required.</p>
+  <div class="cta">
+    <a class="btn p" href="#quickstart">Quick Start →</a>
+    <a class="btn s" href="https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community">View on GitHub</a>
+  </div>
+  <div class="shot"><img src="overview.png" alt="TigerAI Advanced RAG overview"></div>
+</div></header>
+
+<section id="how"><div class="wrap">
+  <h2>How it fits with the OpenGenie AI Stack</h2>
+  <p class="lead">This app is the <b>application layer</b>. The OpenGenie AI Stack is the <b>infrastructure</b> underneath — deploy it first, then plug this in.</p>
+  <div class="stackd">
+    <div class="layer top">
+      <div class="tag2">↑ reference application</div>
+      <div class="t">TigerAI Advanced RAG — Community <span style="color:var(--mut);font-weight:400">(this app)</span></div>
+      <div class="s">nginx UI · backend · PDF splitter</div>
+    </div>
+    <div class="layer bot">
+      <div class="tag2">deploy this first · the engines</div>
+      <div class="t">OpenGenie AI Stack</div>
+      <div class="s">n8n · Qdrant · Open WebUI · Docling · PostgreSQL · Redis · FileBrowser</div>
+    </div>
+  </div>
+</div></section>
+
+<section class="alt" id="features"><div class="wrap">
+  <h2>What you can do</h2>
+  <p class="lead">From raw PDFs to a chat app with verifiable, downloadable sources — all through the web UI.</p>
+  <div class="grid">
+    <div class="f"><div class="ic">📚</div><h3>Build knowledge bases</h3><p>Split → Docling Markdown → JSON chunking → metadata + L1/L2/L3 keyword dictionary → Qdrant ingest.</p></div>
+    <div class="f"><div class="ic">🧩</div><h3>Rule Builder</h3><p>Generate a domain system-prompt from sample documents — compare A/B/C, then pick or synthesize.</p></div>
+    <div class="f"><div class="ic">✅</div><h3>Verification &amp; QC</h3><p>Coverage check (source ↔ vector DB) and a dual-AI answer audit before you go live.</p></div>
+    <div class="f"><div class="ic">💬</div><h3>Cloud chat apps</h3><p>Wire an Open WebUI app to an n8n query webhook in two clicks — no URLs to copy.</p></div>
+    <div class="f"><div class="ic">🔗</div><h3>Citations + downloads</h3><p>Every answer lists the source files it used, each downloadable for verification.</p></div>
+    <div class="f"><div class="ic">🌐</div><h3>Bilingual UI</h3><p>Toggle EN / 中文 anytime — including content returned from the backend.</p></div>
+  </div>
+</div></section>
+
+<section id="quickstart"><div class="wrap">
+  <h2>Quick Start</h2>
+  <p class="lead"><b>Hand it to your AI coding agent — no manual setup.</b> Open Claude Code / Antigravity / Codex and give it two URLs; it installs and wires everything end-to-end.</p>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><div class="c"><b>Give your agent two URLs</b><div class="m">① the OpenGenie AI Stack (infrastructure) &nbsp;② this repo (the application)</div></div></div>
+    <div class="step"><div class="n">2</div><div class="c"><b>It deploys OpenGenie first</b><div class="m">n8n · Qdrant · Open WebUI · Docling · PostgreSQL · Redis · FileBrowser</div></div></div>
+    <div class="step"><div class="n">3</div><div class="c"><b>Then it installs this app &amp; connects them</b><div class="m">compose up → import n8n workflows → install Open WebUI pipes — following AGENTS.md / INSTALL.md</div></div></div>
+    <div class="step"><div class="n">4</div><div class="c"><b>You provide one secret</b><div class="m">a Cloud AI API key (any OpenAI-compatible endpoint). That's the only manual step.</div></div></div>
+  </div>
+  <pre><span class="c"># Tell your agent, in its own words:</span>
+Install these two repos and wire them together end-to-end:
+  1. https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack
+  2. https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community
+Ask me only for the Cloud AI API key.</pre>
+  <div class="note">Images are published <b>multi-arch (amd64 + arm64, incl. NVIDIA Grace / GB10)</b> at <code>ghcr.io/tigerai-taiwan/tigerai-rag-{nginx,backend,splitter}</code>. Prefer to drive it yourself? Follow <a href="https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community/blob/main/INSTALL.md">INSTALL.md</a>.</div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <h2>Editions</h2>
+  <p class="lead">Community is the free, cloud-only edition. On-prem AI, reranking and multimodal catalog RAG are paid tiers.</p>
+  <table>
+    <tr><th></th><th>Community (this repo)</th><th>Pro / Enterprise</th></tr>
+    <tr><td>AI</td><td><b>Cloud</b> (OpenAI-compatible)</td><td>+ On-premise / local (Ollama, llama.cpp, vLLM)</td></tr>
+    <tr><td>Retrieval</td><td>Vector + metadata filtering</td><td>+ Reranking, multimodal catalog RAG, trustworthy QC</td></tr>
+    <tr><td>Training</td><td>Direct training</td><td>+ Scheduling queue</td></tr>
+    <tr><td>Price</td><td><b>Free, Apache-2.0</b></td><td>Commercial</td></tr>
+  </table>
+</div></section>
+
+<section><div class="wrap">
+  <h2>繁體中文</h2>
+  <p class="zh">開源、網頁式的 <b>RAG 知識庫建置平台</b>,同時是 <a href="https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack">OpenGenie AI Stack</a> 的官方範例應用 —— 示範如何把這套自架 AI 基礎設施變成可用的產品。上傳 PDF → 切檔 → Docling 轉檔 → 切塊 + 關鍵字 → 灌入 Qdrant → 透過 Open WebUI 問答,<b>每個答案都附可下載的原始檔出處</b>。全程網頁、中英雙語、免寫程式。<br><br><b>安裝(免動手)</b>:打開 AI coding agent(Claude Code / Antigravity / Codex),把兩個 URL 丟給它 —— ① OpenGenie AI Stack(基礎設施)② 本 repo(應用),agent 會自己裝完串接,只跟你要一把 Cloud AI API key。映像檔為 multi-arch(amd64 + arm64,含 NVIDIA Grace/GB10)。地端 AI、Rerank 重排、多模態型錄 RAG 屬付費版。</p>
+</div></section>
+
+<footer><div class="wrap">
+  <span>© TigerAI Taiwan · Apache-2.0</span>
+  <span class="sp"></span>
+  <a href="https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community">GitHub</a>
+  <a href="https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community/blob/main/INSTALL.md">Install</a>
+  <a href="https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack">OpenGenie Stack</a>
+  <a href="https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community/blob/main/LICENSE">License</a>
+</div></footer>
+
+</body>
+</html>

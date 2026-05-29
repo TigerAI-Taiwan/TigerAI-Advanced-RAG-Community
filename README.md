@@ -61,10 +61,11 @@ Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover th
 |---|---|---|
 | AI | **Cloud** (any OpenAI-compatible endpoint) | **+ On-premise / local** (Ollama, llama.cpp, vLLM) |
 | Retrieval | Vector + metadata filtering | **+ Reranking, multimodal catalog RAG, trustworthy QC** |
+| Cross-document | Per-document Q&A (vector) | **+ Knowledge graph (cross-report, multi-hop relations)** |
 | Training | Direct training | **+ Scheduling queue** |
 | Price | Free, Apache-2.0 | Commercial |
 
-> Need **local / on-prem AI, reranking, or multimodal catalog RAG**? Those are the paid tiers — [get in touch](https://github.com/TigerAI-Taiwan).
+> Need **local / on-prem AI, reranking, multimodal catalog RAG, or a cross-document knowledge graph**? Those are the paid tiers — [get in touch](https://github.com/TigerAI-Taiwan).
 
 ## License
 
@@ -88,4 +89,4 @@ Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover th
 
 **安裝(免動手)**:打開 AI coding agent(**Claude Code / Antigravity / Codex**),把**兩個 URL** 丟給它 —— ① [OpenGenie AI Stack](https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack)(基礎設施)② 本 repo(應用)。Agent 會自己讀完、**安裝並串接好**,人不用介入;只會跟你要一把 **Cloud AI API key**。詳見 **[AGENTS.md](AGENTS.md)** / **[INSTALL.md](INSTALL.md)**。映像檔為 multi-arch(**amd64 + arm64**,含 NVIDIA Grace/GB10),位於 `ghcr.io/tigerai-taiwan/tigerai-rag-*`。
 
-**版本差異**:Community(本 repo,免費、Apache-2.0、**雲端 AI**)= 陽春雲端版;**地端/on-prem、Rerank 重排、多模態型錄 RAG、可信 QC、排程佇列** 屬付費版 —— 需要請洽詢。
+**版本差異**:Community(本 repo,免費、Apache-2.0、**雲端 AI**)= 陽春雲端版;**地端/on-prem、Rerank 重排、多模態型錄 RAG、可信 QC、排程佇列、跨文件知識圖譜(跨報告多跳交叉查詢)** 屬付費版 —— 需要請洽詢。

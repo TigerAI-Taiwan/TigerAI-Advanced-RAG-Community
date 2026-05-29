@@ -164,11 +164,12 @@ Ask me only for the Cloud AI API key.</pre>
 
 <section class="alt"><div class="wrap">
   <h2>Editions</h2>
-  <p class="lead">Community is the free, cloud-only edition. On-prem AI, reranking and multimodal catalog RAG are paid tiers.</p>
+  <p class="lead">Community is the free, cloud-only edition. On-prem AI, reranking, multimodal catalog RAG and a cross-document knowledge graph are paid tiers.</p>
   <table>
     <tr><th></th><th>Community (this repo)</th><th>Pro / Enterprise</th></tr>
     <tr><td>AI</td><td><b>Cloud</b> (OpenAI-compatible)</td><td>+ On-premise / local (Ollama, llama.cpp, vLLM)</td></tr>
     <tr><td>Retrieval</td><td>Vector + metadata filtering</td><td>+ Reranking, multimodal catalog RAG, trustworthy QC</td></tr>
+    <tr><td>Cross-document</td><td>Per-document Q&amp;A (vector)</td><td>+ Knowledge graph (cross-report, multi-hop relations)</td></tr>
     <tr><td>Training</td><td>Direct training</td><td>+ Scheduling queue</td></tr>
     <tr><td>Price</td><td><b>Free, Apache-2.0</b></td><td>Commercial</td></tr>
   </table>
@@ -176,7 +177,7 @@ Ask me only for the Cloud AI API key.</pre>
 
 <section><div class="wrap">
   <h2>繁體中文</h2>
-  <p class="zh">開源、網頁式的 <b>RAG 知識庫建置平台</b>,同時是 <a href="https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack">OpenGenie AI Stack</a> 的官方範例應用 —— 示範如何把這套自架 AI 基礎設施變成可用的產品。上傳 PDF → 切檔 → Docling 轉檔 → 切塊 + 關鍵字 → 灌入 Qdrant → 透過 Open WebUI 問答,<b>每個答案都附可下載的原始檔出處</b>。全程網頁、中英雙語、免寫程式。<br><br><b>安裝(免動手)</b>:打開 AI coding agent(Claude Code / Antigravity / Codex),把兩個 URL 丟給它 —— ① OpenGenie AI Stack(基礎設施)② 本 repo(應用),agent 會自己裝完串接,只跟你要一把 Cloud AI API key。映像檔為 multi-arch(amd64 + arm64,含 NVIDIA Grace/GB10)。地端 AI、Rerank 重排、多模態型錄 RAG 屬付費版。</p>
+  <p class="zh">開源、網頁式的 <b>RAG 知識庫建置平台</b>,同時是 <a href="https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack">OpenGenie AI Stack</a> 的官方範例應用 —— 示範如何把這套自架 AI 基礎設施變成可用的產品。上傳 PDF → 切檔 → Docling 轉檔 → 切塊 + 關鍵字 → 灌入 Qdrant → 透過 Open WebUI 問答,<b>每個答案都附可下載的原始檔出處</b>。全程網頁、中英雙語、免寫程式。<br><br><b>安裝(免動手)</b>:打開 AI coding agent(Claude Code / Antigravity / Codex),把兩個 URL 丟給它 —— ① OpenGenie AI Stack(基礎設施)② 本 repo(應用),agent 會自己裝完串接,只跟你要一把 Cloud AI API key。映像檔為 multi-arch(amd64 + arm64,含 NVIDIA Grace/GB10)。地端 AI、Rerank 重排、多模態型錄 RAG、跨文件知識圖譜(跨報告多跳交叉查詢)屬付費版。</p>
 </div></section>
 
 <footer><div class="wrap">

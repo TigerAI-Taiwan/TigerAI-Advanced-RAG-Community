@@ -1,0 +1,853 @@
+{
+  "name": "#05-RAG-Core-v1.0",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trig",
+      "name": "When Called",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://tigerai-backend:3060/query/config?app_name={{ encodeURIComponent($json.app_name || '') }}&collection_name={{ encodeURIComponent($json.collection_name || '') }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "n-fetch-cfg",
+      "name": "Fetch Backend Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -368,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://tigerai-backend:3060/keywords/hierarchy?collection_name={{ encodeURIComponent($json.collection_name || '') }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "n-fetch-kw",
+      "name": "Fetch L1/L2/L3 Keywords",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a-chat",
+              "name": "chatInput",
+              "value": "={{ $('When Called').item.json.chatInput || $('When Called').item.json.question || $('When Called').item.json.query }}",
+              "type": "string"
+            },
+            {
+              "id": "a-sess",
+              "name": "sessionId",
+              "value": "={{ $('When Called').item.json.sessionId || $('When Called').item.json.session_id || 'default' }}",
+              "type": "string"
+            },
+            {
+              "id": "a-coll",
+              "name": "collection_name",
+              "value": "={{ $('Fetch Backend Config').item.json.collection_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a-sys",
+              "name": "system_prompt",
+              "value": "={{ $('Fetch Backend Config').item.json.system_prompt || '你是專業 RAG 助手，只根據 Retrieved Context 作答；若內容不足明確回覆「文件內未提及」。全部繁體中文。' }}",
+              "type": "string"
+            },
+            {
+              "id": "a-curl",
+              "name": "cloud_ai_url",
+              "value": "={{ $('Fetch Backend Config').item.json.cloud_ai_url || 'https://api.openai.com/v1' }}",
+              "type": "string"
+            },
+            {
+              "id": "a-ckey",
+              "name": "cloud_ai_key",
+              "value": "={{ $('Fetch Backend Config').item.json.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "a-cemb",
+              "name": "cloud_ai_embedding_model",
+              "value": "={{ $('Fetch Backend Config').item.json.cloud_ai_embedding_model }}",
+              "type": "string"
+            },
+            {
+              "id": "a-qurl",
+              "name": "qdrant_url",
+              "value": "={{ $('Fetch Backend Config').item.json.qdrant_url || 'http://qdrant-tigerai:6333' }}",
+              "type": "string"
+            },
+            {
+              "id": "a-qkey",
+              "name": "qdrant_key",
+              "value": "={{ $('Fetch Backend Config').item.json.qdrant_key || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a-mink",
+              "name": "min_keywords",
+              "value": "={{ $('When Called').item.json.min_keywords || 1 }}",
+              "type": "number"
+            },
+            {
+              "id": "a-l1",
+              "name": "L1",
+              "value": "={{ $json.l1_string || '(無)' }}",
+              "type": "string"
+            },
+            {
+              "id": "a-l2",
+              "name": "L2",
+              "value": "={{ $json.l2_string || '(無)' }}",
+              "type": "string"
+            },
+            {
+              "id": "a-l3",
+              "name": "L3",
+              "value": "={{ $json.l3_string || '(無)' }}",
+              "type": "string"
+            },
+            {
+              "id": "ai_provider",
+              "name": "ai_provider",
+              "value": "={{ $('When Called').item.json.provider || $('Fetch Backend Config').item.json.ai_provider || 'cloud' }}",
+              "type": "string"
+            },
+            {
+              "id": "ollama_url",
+              "name": "ollama_url",
+              "value": "={{ $('Fetch Backend Config').item.json.ollama_url || 'http://ollama:11434' }}",
+              "type": "string"
+            },
+            {
+              "id": "ollama_embedding_model",
+              "name": "ollama_embedding_model",
+              "value": "={{ $('Fetch Backend Config').item.json.ollama_embedding_model }}",
+              "type": "string"
+            },
+            {
+              "id": "ollama_api_key",
+              "name": "ollama_api_key",
+              "value": "={{ $('Fetch Backend Config').item.json.ollama_api_key || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-vars",
+      "name": "Build Context Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        48,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=### 待處理資料\n- 查詢內容：{{ $json.chatInput }}\n- L1 關鍵字：{{ $json.L1 }}\n- L2 關鍵字：{{ $json.L2 }}\n- L3 關鍵字：{{ $json.L3 }}\n\n請依 System Prompt 規則執行並輸出。",
+        "options": {
+          "systemMessage": "=# Role\n你是意圖判斷與關鍵字抽取專家。嚴格使用繁體中文。\n\n# 規則（依序）\n\n## Rule 1 — 任務優先\n- 含「Suggest follow-up questions」→ 產 follow-up JSON 陣列。\n- 含「請示範如何使用」→ 說明 L1/L2/L3 用法並舉例。\n- 此情境嚴禁輸出 \"#1 關鍵字:\"。\n\n## Rule 2 — 關鍵字比對（RAG 觸發）\n雙軌任一命中即算：\n(A) 字面比對已由前一步程式（literal_keywords）確定處理，你不必重做字面比對。\n(B) 語意：同義詞/口語映射回字典原詞（例「炒魷魚」→「資遣」、「退休金」→「退休」、「加班費」→「工資/加班」）。\n- 命中 ≥ {{ $json.min_keywords }} 個 → 僅輸出一行（禁止換行、禁止其他文字）：\n  #1 關鍵字: 詞1、詞2\n  （用字典原詞，不是使用者說法）\n- 完全沒命中 → 進 Rule 3。\n\n## Rule 3 — 直接回答（不查 RAG，自由發揮）\n一般/專業問題 → 直接以你的知識自然、清楚地回答（繁體中文），像一般 AI 助手即可。**不要套三段式、不要寫「引用條款」或「文件內未提及」**（那是 RAG 模式專用）。\n非相關領域 → 回「抱歉我不懂你的提問，請補充相關詞彙，或輸入『請示範如何使用』。」\n此模式禁止輸出 \"#1 關鍵字:\"。\n\n# 輸出規則\n只有 Rule 2 命中才輸出 \"#1 關鍵字:\" 單行；其他情況直接給最終答案不帶 tag。"
+        }
+      },
+      "id": "n-agent1",
+      "name": "AI Agent1 Intent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        288,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-5.4-mini",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "n-llm1",
+      "name": "OpenAI Chat (Agent1)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        288,
+        400
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "j9NcDQ1CpW9X6v2Z",
+          "name": "OpenAiaccount"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Build Context Vars').item.json.sessionId }}"
+      },
+      "id": "n-mem",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-rag",
+              "leftValue": "={{ $json.output }}",
+              "rightValue": "#1 關鍵字",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "c-lit",
+              "leftValue": "={{ $('Literal Keyword Match').item.json.literal_hit }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "n-route",
+      "name": "Route RAG or Direct",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 解析 Agent1 的 #1 關鍵字 行，並合併前一步程式確定的字面命中\nconst raw = $json.output || '';\nconst m = raw.match(/#1\\s*關鍵字\\s*[:：]\\s*(.+?)(?:\\n|$)/);\nconst fromLLM = m ? m[1].split(/[、,，;；\\s]+/).map(s => s.trim()).filter(Boolean) : [];\nconst literal = $('Literal Keyword Match').first().json.literal_keywords || [];\nconst kws = [...new Set([...literal, ...fromLLM])];\nreturn [{ json: { keywords: kws } }];"
+      },
+      "id": "n-parse-kw",
+      "name": "Parse Keywords",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Build Context Vars').item.json.ai_provider === 'local' ? ($('Build Context Vars').item.json.ollama_url + '/v1/embeddings') : ($('Build Context Vars').item.json.cloud_ai_url + '/embeddings') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Build Context Vars').item.json.ai_provider === 'local' ? $('Build Context Vars').item.json.ollama_api_key : $('Build Context Vars').item.json.cloud_ai_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $('Build Context Vars').item.json.ai_provider === 'local' ? $('Build Context Vars').item.json.ollama_embedding_model : $('Build Context Vars').item.json.cloud_ai_embedding_model }}\",\n  \"input\": {{ JSON.stringify($('Build Context Vars').item.json.chatInput) }}\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "n-embed",
+      "name": "Embed Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        944,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 組 Qdrant search body：keywords OR filter 跨多欄（TigerAI 攤平 payload）\nconst kws = $('Parse Keywords').first().json.keywords || [];\nconst embedResp = $input.first().json;\nlet vector = null;\nif (embedResp.data && Array.isArray(embedResp.data) && embedResp.data[0]?.embedding) vector = embedResp.data[0].embedding;\nelse if (embedResp.embedding) vector = embedResp.embedding;\nelse if (embedResp.embeddings) vector = Array.isArray(embedResp.embeddings[0]) ? embedResp.embeddings[0] : embedResp.embeddings;\nif (!vector) throw new Error('Embed 沒回 vector: ' + JSON.stringify(embedResp).substring(0,200));\nconst body = { vector, limit: 5, with_payload: true, with_vector: false };\nif (kws.length) {\n  const fields = ['tags','keywords','level1','level2','level3','metadata_tags','category','subcategory'];\n  const should = [];\n  for (const f of fields) { should.push({ key: f, match: { any: kws } }); for (const kw of kws) should.push({ key: f, match: { value: kw } }); }\n  body.filter = { should };\n}\nreturn [{ json: { qdrant_body: body, collection: $('Build Context Vars').item.json.collection_name } }];"
+      },
+      "id": "n-build-q",
+      "name": "Build Qdrant Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Build Context Vars').item.json.qdrant_url }}/collections/{{ $json.collection }}/points/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "api-key",
+              "value": "={{ $('Build Context Vars').item.json.qdrant_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.qdrant_body) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "n-qdrant",
+      "name": "Qdrant Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-hit",
+              "leftValue": "={{ ($json.result || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "n-has-hits",
+      "name": "Has Hits?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Build Context Vars').item.json.qdrant_url }}/collections/{{ $('Build Qdrant Body').item.json.collection }}/points/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "api-key",
+              "value": "={{ $('Build Context Vars').item.json.qdrant_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"vector\": {{ JSON.stringify($('Build Qdrant Body').item.json.qdrant_body.vector) }},\n  \"limit\": 5,\n  \"with_payload\": true,\n  \"with_vector\": false\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "n-qdrant-fb",
+      "name": "Qdrant Search (Fallback no-filter)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1648,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Qdrant 命中 → context 字串 + sources（filter 或 fallback 都進這）\nconst hits = $input.first().json.result || [];\nconst ctx = hits.map((h,i)=>{const p=h.payload||{};const src=p.original_file||p.source_file||'';const sc=typeof h.score==='number'?h.score.toFixed(3):'-';return `[${i+1}] (score=${sc}${src?', '+src:''})\\n${p.text||''}`;}).join('\\n\\n');\nreturn [{ json: { context: ctx, hits: hits.length, sources: hits.map(h=>h.payload?.original_file||h.payload?.source_file).filter(Boolean) } }];"
+      },
+      "id": "n-context",
+      "name": "Build RAG Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uc",
+              "name": "user_content",
+              "value": "=問題：{{ $('Build Context Vars').item.json.chatInput }}\n\nRetrieved Context:\n{{ $json.context }}\n\n請依下方三段式格式作答（繁體中文）。",
+              "type": "string"
+            },
+            {
+              "id": "sp",
+              "name": "system_prompt",
+              "value": "={{ $('Build Context Vars').item.json.system_prompt }}\n\n# 輸出格式（嚴格遵守，繁體中文）\n必須用以下三段式 Markdown 標題輸出，順序不可顛倒：\n\n### 1. 引用條款\n逐條引用 Retrieved Context 原文（含條號/章節名），用 > 引述。有幾條列幾條。若 Context 沒有可引用條文 → 「文件內未提及」。\n\n### 2. 說明\n用自己的話解釋上述條款如何套用到提問（不重複原文）。\n\n### 3. 建議作法\n列 1~5 點 bullet list。文件不足時寫「依現有文件無法給出可靠建議，請補充相關條文或向專業人士諮詢。」\n\n### 4. 建議追問\n根據提問與 Retrieved Context，最後列出 2~3 個使用者可能接著想問的問題（繁體中文、具體、可直接點問）。優先採用 Context 中 chunk 自帶的 suggested_questions；無則依主題自擬。格式：\n- 問題一？\n- 問題二？",
+              "type": "string"
+            },
+            {
+              "id": "md",
+              "name": "model",
+              "value": "={{ $('Build Context Vars').item.json.ai_provider === 'local' ? $('Fetch Backend Config').item.json.ollama_main_model : $('Fetch Backend Config').item.json.cloud_ai_model }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "bli05",
+      "name": "Build LLM Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1984,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 確定性「字面」關鍵字比對(子字串)。字典詞真的出現在問題裡 → literal_hit,直接認定命中(不靠 LLM)。\nconst cv = $input.first().json;\nconst q = String(cv.chatInput || '');\nconst dict = [];\n['L1', 'L2', 'L3'].forEach(k => { String(cv[k] || '').split(/[、,，;；\\s]+/).forEach(w => { w = w.trim(); if (w && w !== '(無)') dict.push(w); }); });\nconst literal = [...new Set(dict.filter(w => w.length >= 2 && q.includes(w)))];\nreturn [{ json: { ...cv, literal_hit: literal.length > 0, literal_keywords: literal } }];"
+      },
+      "id": "lit-match",
+      "name": "Literal Keyword Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "o-route",
+              "name": "route",
+              "value": "rag",
+              "type": "string"
+            },
+            {
+              "id": "o-uc",
+              "name": "user_content",
+              "value": "={{ $json.user_content }}",
+              "type": "string"
+            },
+            {
+              "id": "o-sp",
+              "name": "system_prompt",
+              "value": "={{ $json.system_prompt }}",
+              "type": "string"
+            },
+            {
+              "id": "o-md",
+              "name": "model",
+              "value": "={{ $json.model }}",
+              "type": "string"
+            },
+            {
+              "id": "o-ctx",
+              "name": "context",
+              "value": "={{ $json.context }}",
+              "type": "string"
+            },
+            {
+              "id": "o-hits",
+              "name": "hits",
+              "value": "={{ $(\"Build RAG Context\").item.json.hits }}",
+              "type": "number"
+            },
+            {
+              "id": "o-src",
+              "name": "sources",
+              "value": "={{ $(\"Build RAG Context\").item.json.sources }}",
+              "type": "array"
+            },
+            {
+              "id": "o-kw",
+              "name": "keywords_used",
+              "value": "={{ $(\"Parse Keywords\").item.json.keywords }}",
+              "type": "array"
+            },
+            {
+              "id": "o-sess",
+              "name": "sessionId",
+              "value": "={{ $(\"Build Context Vars\").item.json.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "o-prov",
+              "name": "ai_provider",
+              "value": "={{ $(\"Build Context Vars\").item.json.ai_provider }}",
+              "type": "string"
+            },
+            {
+              "id": "o-curl",
+              "name": "cloud_ai_url",
+              "value": "={{ $(\"Build Context Vars\").item.json.cloud_ai_url }}",
+              "type": "string"
+            },
+            {
+              "id": "o-ckey",
+              "name": "cloud_ai_key",
+              "value": "={{ $(\"Build Context Vars\").item.json.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "o-ourl",
+              "name": "ollama_url",
+              "value": "={{ $(\"Build Context Vars\").item.json.ollama_url }}",
+              "type": "string"
+            },
+            {
+              "id": "o-okey",
+              "name": "ollama_api_key",
+              "value": "={{ $(\"Build Context Vars\").item.json.ollama_api_key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "out-rag",
+      "name": "Core Output (RAG)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2208,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d-route",
+              "name": "route",
+              "value": "direct",
+              "type": "string"
+            },
+            {
+              "id": "d-ans",
+              "name": "answer",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            },
+            {
+              "id": "d-sess",
+              "name": "sessionId",
+              "value": "={{ $(\"Build Context Vars\").item.json.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "d-prov",
+              "name": "ai_provider",
+              "value": "={{ $(\"Build Context Vars\").item.json.ai_provider }}",
+              "type": "string"
+            },
+            {
+              "id": "d-md",
+              "name": "model",
+              "value": "={{ $(\"Build Context Vars\").item.json.ai_provider === \"local\" ? $(\"Fetch Backend Config\").item.json.ollama_main_model : $(\"Fetch Backend Config\").item.json.cloud_ai_model }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "out-direct",
+      "name": "Core Output (Direct)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        752,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# #05-RAG-Core v1.0 (2026-05-25)\n\n共用 RAG 檢索核心子工作流。被 4 支查詢入口(非串流×雲地 / 串流×雲地)用 Execute Workflow 呼叫。\n\n## 契約\n- 輸入(呼叫端傳):{ chatInput, app_name, collection_name, sessionId, min_keywords }\n- 內部:Fetch Config(app_name→collection 單一來源)→ Fetch KW → Build Context → Agent1 Intent(雲端,同 #05 現況)→ Route → RAG(embed→qdrant→fallback→context→LLM input)或 Direct\n- 輸出:\n  - route='rag': { user_content, system_prompt, model, context, hits, sources, keywords_used, sessionId, ai_provider, cloud_ai_url/key, ollama_url/key }\n  - route='direct': { answer, sessionId, ai_provider }\n\n## 版本歷史\n- v1.0 (2026-05-25): 從 #05-Query-v1.10 抽出檢索段(Build LLM Input 之前)。intent 暫維持雲端 langchain Agent1+Memory(零行為變更);純地端 intent 切換留作後續。\n\n## 設計理由\n檢索回傳離散結果(非串流),放子工作流不違反「串流不可用子工作流」規則 → 4 支入口共用一份檢索,只差最後 LLM 呼叫。",
+        "height": 420,
+        "width": 600,
+        "color": 4
+      },
+      "id": "note",
+      "name": "Core Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -300
+      ]
+    }
+  ],
+  "connections": {
+    "When Called": {
+      "main": [
+        [
+          {
+            "node": "Fetch Backend Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Backend Config": {
+      "main": [
+        [
+          {
+            "node": "Fetch L1/L2/L3 Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch L1/L2/L3 Keywords": {
+      "main": [
+        [
+          {
+            "node": "Build Context Vars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context Vars": {
+      "main": [
+        [
+          {
+            "node": "Literal Keyword Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Literal Keyword Match": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1 Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat (Agent1)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1 Intent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1 Intent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1 Intent": {
+      "main": [
+        [
+          {
+            "node": "Route RAG or Direct",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route RAG or Direct": {
+      "main": [
+        [
+          {
+            "node": "Parse Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Core Output (Direct)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Keywords": {
+      "main": [
+        [
+          {
+            "node": "Embed Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Query": {
+      "main": [
+        [
+          {
+            "node": "Build Qdrant Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Qdrant Body": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Search": {
+      "main": [
+        [
+          {
+            "node": "Has Hits?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Hits?": {
+      "main": [
+        [
+          {
+            "node": "Build RAG Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Qdrant Search (Fallback no-filter)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Search (Fallback no-filter)": {
+      "main": [
+        [
+          {
+            "node": "Build RAG Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build RAG Context": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LLM Input": {
+      "main": [
+        [
+          {
+            "node": "Core Output (RAG)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

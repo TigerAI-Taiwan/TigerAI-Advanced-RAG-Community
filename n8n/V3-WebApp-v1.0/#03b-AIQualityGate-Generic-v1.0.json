@@ -1,0 +1,409 @@
+{
+  "name": "#03b-AIQualityGate-Generic-v1.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tigerai-qcgate",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "n_webhook",
+      "name": "Webhook (QC Gate)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "tigerai-qcgate"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "folder_path",
+              "value": "={{ $json.body.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "folder_id",
+              "value": "={{ $json.body.folder_path.split('/').filter(p => p !== '')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "project_name",
+              "value": "={{ $json.body.project_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "collection_name",
+              "value": "={{ $json.body.collection_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "backend_url",
+              "value": "={{ $json.body.backend_url || 'http://tigerai-backend:3060' }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "qc_pass_score",
+              "value": "={{ $json.body.qc_pass_score || '70' }}",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "qc_prompt",
+              "value": "={{ $json.body.qc_prompt || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "qc_ai_model",
+              "value": "={{ $json.body.qc_ai_model || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n_extract",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/home/node/.n8n-files/RAG/{{ $json.folder_id }}/Step2-MD2JSON/*.json",
+        "options": {}
+      },
+      "id": "n_read",
+      "name": "Read JSON Files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "id": "n_parse",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.0 2026-05-23: 每個來源檔 → 一個 QC 判定項目（含 prompt）\n// chunk JSON 經 Extract From File(fromJson) 後，陣列可能在 $json 或 $json.data（沿用 #04 偵測法）\nconst vars = $('Extract Payload').first().json;\nconst passScore = vars.qc_pass_score || '70';\nconst promptTpl = vars.qc_prompt || '請審查下列 chunk，回傳 JSON {verdict,score,issues,summary}。{chunks}';\nconst out = [];\nfor (const item of $input.all()) {\n  let chunks;\n  if (Array.isArray(item.json)) chunks = item.json;\n  else if (Array.isArray(item.json.data)) chunks = item.json.data;\n  else if (item.json.text) chunks = [item.json];\n  else continue;\n  const sourceFile = chunks[0]?.metadata?.source_file || item.json.file_name || '';\n  const fileName = sourceFile.replace(/\\.(md|markdown)$/i, '.json');\n  if (!fileName) continue;\n  const chunksJson = JSON.stringify(chunks, null, 1).slice(0, 40000);\n  const prompt = promptTpl.replace('{pass_score}', String(passScore)).replace('{chunks}', chunksJson);\n  out.push({ json: { file_name: fileName, chunk_count: chunks.length, prompt } });\n}\n// 沒有任何 chunk 檔 → 放一個 PASS 佔位，讓流程能走到 callback 觸發 Step4（不卡住）\nif (out.length === 0) {\n  return [{ json: { file_name: '', chunk_count: 0, prompt: 'No chunks. Reply exactly: {\"verdict\":\"PASS\",\"score\":100,\"issues\":[],\"summary\":\"no chunk files\"}' } }];\n}\nreturn out;\n"
+      },
+      "id": "n_buildqc",
+      "name": "Build QC Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "options": {
+          "systemMessage": "你是嚴格的 RAG chunk 品質審查員。只輸出一個合法 JSON 物件，不要任何其他文字、不要 markdown 圍欄。格式：{\"verdict\":\"PASS\"|\"FAIL\",\"score\":<0-100整數>,\"issues\":[{\"severity\":\"high\"|\"medium\"|\"low\",\"category\":\"...\",\"description\":\"...\"}],\"summary\":\"...\"}"
+        }
+      },
+      "id": "n_judge",
+      "name": "QC Judge",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1060,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-5.4-mini",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "n_llm",
+      "name": "OpenAI Chat (QC)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        520
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "j9NcDQ1CpW9X6v2Z",
+          "name": "OpenAiaccount"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.0 2026-05-23: 解析 QC Judge 輸出 → {file_name,verdict,score,issues,summary}\n// 解析失敗 / LLM 異常 → fallback PASS（不擋流程，留 issue 記錄）；二次判斷 high issue 或低分降 FAIL\nconst inputs = $('Build QC Input').all();\nconst passScore = parseInt($('Extract Payload').first().json.qc_pass_score || '70', 10);\nreturn $input.all().map((item, i) => {\n  const fileName = inputs[i]?.json?.file_name || '';\n  const raw = item.json.output ?? item.json.text ?? '';\n  let parsed = null;\n  try {\n    const s = String(raw).trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsed = JSON.parse(s);\n  } catch (e) {\n    const m = String(raw).match(/\\{[\\s\\S]*\\}/);\n    try { parsed = m ? JSON.parse(m[0]) : null; } catch (e2) { parsed = null; }\n  }\n  if (!parsed || typeof parsed !== 'object') {\n    parsed = { verdict: 'PASS', score: 0, issues: [{ severity: 'medium', category: 'qc_parse_error', description: 'QC 輸出無法解析，預設放行' }], summary: 'QC parse error, defaulted PASS' };\n  }\n  const hasHigh = (parsed.issues || []).some(x => x && x.severity === 'high');\n  let verdict = parsed.verdict === 'FAIL' ? 'FAIL' : 'PASS';\n  if (verdict === 'PASS' && (hasHigh || (Number.isFinite(parsed.score) && parsed.score < passScore))) verdict = 'FAIL';\n  return { json: { file_name: fileName, verdict, score: Number.isFinite(parsed.score) ? parsed.score : null, issues: parsed.issues || [], summary: parsed.summary || '' } };\n});\n"
+      },
+      "id": "n_verdict",
+      "name": "Parse Verdict",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.0 2026-05-23: 聚合所有檔的 QC 判定 → 單一物件丟給 backend /qc/exclude\nconst vars = $('Extract Payload').first().json;\nconst results = $input.all().map(i => i.json).filter(r => r.file_name);\nreturn [{ json: { folder_path: vars.folder_path, results } }];\n"
+      },
+      "id": "n_buildex",
+      "name": "Build Exclude Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.backend_url }}/qc/exclude",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 120000
+        },
+        "contentType": "json"
+      },
+      "id": "n_excl",
+      "name": "Exclude FAIL → Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.0 2026-05-23: 組 callback → backend /webhook/n8n（status 任意非空即可，編排靠 DB 的 meta.status='QC 進行中' 推進到 Step4）\nconst vars = $('Extract Payload').first().json;\nlet ex = {};\ntry { ex = $('Exclude FAIL → Backend').first().json || {}; } catch (e) { ex = {}; }\nreturn [{ json: {\n  folder_path: vars.folder_path,\n  project_name: vars.project_name,\n  collection_name: vars.collection_name,\n  status: 'QC 完成',\n  qc_excluded: ex.excluded || 0,\n  qc_moved: ex.moved || 0\n} }];\n"
+      },
+      "id": "n_buildcb",
+      "name": "Build Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.backend_url }}/webhook/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 15000
+        },
+        "contentType": "json"
+      },
+      "id": "n_cb",
+      "name": "Callback to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## #03b AI 品質閘門 (AI Quality Gate) v1.0\n\n**用途**：Step3→Step4 之間，用 LLM 對 Step2-MD2JSON 的 chunk 做語義審查；FAIL 的整個 .json 移到 `Step2-MD2JSON/_excluded/`，不進向量庫（#04 glob 為 `*.json` 非遞迴，自動跳過子目錄）。\n\n**可開關**：backend `qc_ai_enabled=true` 才會被編排觸發（預設關，不影響現有 pipeline）。pass_score / prompt 由 backend 帶入 payload。\n\n**原生節點**：QC Judge = `@n8n/n8n-nodes-langchain.agent` + `lmChatOpenAi`（OpenAiaccount 憑證）。\n\n**換 QC 模型**：改 \"OpenAI Chat (QC)\" 節點的 model（目前 gpt-5.4-mini）。地端切換留待 階段2。\n\n### 變更歷史\n- v1.0 (2026-05-23): 初版。native LangChain QC → /qc/exclude 移檔 → callback 進 Step4。\n",
+        "height": 360,
+        "width": 460
+      },
+      "id": "n_sticky",
+      "name": "Workflow Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -120
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (QC Gate)": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Read JSON Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read JSON Files": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Build QC Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build QC Input": {
+      "main": [
+        [
+          {
+            "node": "QC Judge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QC Judge": {
+      "main": [
+        [
+          {
+            "node": "Parse Verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat (QC)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "QC Judge",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Verdict": {
+      "main": [
+        [
+          {
+            "node": "Build Exclude Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Exclude Request": {
+      "main": [
+        [
+          {
+            "node": "Exclude FAIL → Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exclude FAIL → Backend": {
+      "main": [
+        [
+          {
+            "node": "Build Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Callback": {
+      "main": [
+        [
+          {
+            "node": "Callback to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

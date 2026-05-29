@@ -1,0 +1,378 @@
+{
+  "name": "#01-DataTransferring-Docling-Generic-v1.3",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tigerai-step1",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "n-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "tigerai-step1-docling"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "folder_path",
+              "value": "={{ $json.body.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b",
+              "name": "folder_id",
+              "value": "={{ $json.body.folder_path.split('/').filter(p => p !== '')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "project_name",
+              "value": "={{ $json.body.project_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "collection_name",
+              "value": "={{ $json.body.collection_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "allowed_formats",
+              "value": "={{ $json.body.allowed_formats || 'pdf' }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "docling_url",
+              "value": "={{ $json.body.docling_url || 'http://docling-intel:5001' }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "backend_url",
+              "value": "={{ $json.body.backend_url || 'http://tigerai-backend:3060' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-vars",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/home/node/.n8n-files/RAG/{{ $json.folder_id }}/*",
+        "options": {}
+      },
+      "id": "n-list",
+      "name": "List Project Files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter to allowed formats only; skip system dirs/reports/sub-folders\nconst vars = $('Extract Payload').first().json;\nconst allowed = (vars.allowed_formats || 'pdf').split(',').map(s => s.trim().toLowerCase());\nconst out = [];\nfor (const item of $input.all()) {\n  const fileName = item.binary?.data?.fileName || item.json?.fileName || '';\n  if (!fileName) continue;\n  // Skip Step* subfolders, 000-* reports, _sample, _rag_rules\n  if (/^(Step\\d|000-|_sample|_rag_rules)/i.test(fileName)) continue;\n  const ext = (fileName.split('.').pop() || '').toLowerCase();\n  if (!allowed.includes(ext)) continue;\n  out.push(item);\n}\nreturn out;"
+      },
+      "id": "n-filter",
+      "name": "Filter Allowed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "n-loop",
+      "name": "Loop Per File",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.docling_url }}/v1/convert/file",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "files",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "to_formats",
+              "value": "md"
+            },
+            {
+              "name": "do_ocr",
+              "value": "true"
+            },
+            {
+              "name": "image_export_mode",
+              "value": "placeholder"
+            },
+            {
+              "name": "include_images",
+              "value": "false"
+            },
+            {
+              "name": "do_picture_classification",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 1800000
+        }
+      },
+      "id": "n-docling",
+      "name": "Docling Convert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.1 2026-04-21: Docling v1 API 正確回傳在 document.md_content\nconst fileItem = $('Loop Per File').first();\nconst doclingResp = $input.first().json;\nconst md = doclingResp.document?.md_content\n  || doclingResp.md_content\n  || doclingResp.markdown\n  || doclingResp.content\n  || doclingResp.text\n  || '';\nif (!md) throw new Error('Docling returned empty markdown: ' + JSON.stringify(doclingResp).substring(0, 300));\n\nconst origName = fileItem.binary?.data?.fileName || 'unknown.pdf';\nconst mdName = origName.replace(/\\.[^.]+$/, '.md');\n\nreturn [{\n  json: { file_name: mdName, size: md.length },\n  binary: {\n    data: {\n      data: Buffer.from(md, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: mdName\n    }\n  }\n}];"
+      },
+      "id": "n-build-md",
+      "name": "Build MD Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/home/node/.n8n-files/RAG/{{ $('Extract Payload').first().json.folder_id }}/Step1-File2MD/{{ $json.file_name }}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "n-write",
+      "name": "Write MD File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const vars = $('Extract Payload').first().json;\nconst files = $input.all();\nreturn [{\n  json: {\n    folder_path: vars.folder_path,\n    project_name: vars.project_name,\n    collection_name: vars.collection_name,\n    status: 'Step 01 進行中',\n    files_converted: files.length,\n    message: `Docling converted ${files.length} files to MD`\n  }\n}];"
+      },
+      "id": "n-build-cb",
+      "name": "Build Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.backend_url }}/webhook/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 15000
+        },
+        "contentType": "json"
+      },
+      "id": "n-cb",
+      "name": "Callback to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# #01 - Docling PDF→MD Generic (v1.3)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — Docling container 改名 `docling-intel` → `docling`（移除 Intel 專屬命名，支援 CPU / CUDA 兩種 image 變體）。default URL 跟進 `http://docling:5001`。\n- **v1.2 (2026-04-21)** — 對齊 前代 @001 邏輯：不論 webhook 收到 `/202604219586` 或 `/202604219586/Step1-File2MD`，都用 `folder_id = folder_path.split('/').filter(p=>p)[0]`（取第 1 段）當主目錄。讀寫路徑固定：讀 `/RAG/{folder_id}/*`，寫 `/RAG/{folder_id}/Step1-File2MD/*`。防止誤觸子資料夾按鈕導致讀錯位置。\n- **v1.1 (2026-04-21)** — 5 處關鍵修正（對齊 backend doclingConvertPdfToMd 最終版）：\n  1. URL `/convert` → `/v1/convert/file`（Docling Serve v1 正確路徑）\n  2. 檔案欄位 `file` → `files`（單/複數對 API 規範敏感）\n  3. 加 `image_export_mode=placeholder`（預設 `embedded` 會把 PDF 每頁渲染成 base64 塞 md，真文字被淹沒）\n  4. 加 `do_ocr=true` / `include_images=false` / `do_picture_classification=false` / `to_formats=md`\n  5. Response 讀 `document.md_content`（不是 `markdown`），加 fallback\n  6. Timeout 10 min → 30 min（對齊 backend）\n- **v1.0 (2026-04-20)** — 初版。從 前代 @001 改 generic\n\n**Trigger:** Webhook `POST /webhook/tigerai-step1`\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"project_name\": \"proj_A\",\n  \"collection_name\": \"labor_law\",\n  \"allowed_formats\": \"pdf\",\n  \"docling_url\": \"http://docling:5001\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n\n**Flow:**\n1. List all files at project root (not Step subfolders)\n2. Filter by allowed extensions (default pdf)\n3. Loop: POST each file to Docling `/convert`\n4. Write Docling's markdown to `/Step1-File2MD/{name}.md`\n5. Callback backend with status='Step 01 進行中'\n\n**Notes:**\n- Skips `_rag_rules/`, `_sample/`, `Step*` subfolders\n- Skips `000-*` completion reports\n- 10 minute timeout per file (large PDFs)",
+        "height": 380,
+        "width": 460,
+        "color": 4
+      },
+      "id": "n-note",
+      "name": "Workflow Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -500,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "List Project Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Project Files": {
+      "main": [
+        [
+          {
+            "node": "Filter Allowed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Allowed": {
+      "main": [
+        [
+          {
+            "node": "Loop Per File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Per File": {
+      "main": [
+        [
+          {
+            "node": "Build Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Docling Convert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Docling Convert": {
+      "main": [
+        [
+          {
+            "node": "Build MD Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build MD Output": {
+      "main": [
+        [
+          {
+            "node": "Write MD File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write MD File": {
+      "main": [
+        [
+          {
+            "node": "Loop Per File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Callback": {
+      "main": [
+        [
+          {
+            "node": "Callback to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "tigerai"
+    },
+    {
+      "name": "generic"
+    }
+  ]
+}

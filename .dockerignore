@@ -1,0 +1,12 @@
+# root build context (nginx image) — Dockerfile 只 COPY 前端檔，仍排除密鑰/雜物縮小 context
+.git/
+.gitignore
+*.env
+backend/.env
+!*.env.example
+node_modules/
+**/__pycache__/
+*.pyc
+*.log
+deployments/data/
+*.md

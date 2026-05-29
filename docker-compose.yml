@@ -1,0 +1,58 @@
+# TigerAI Advanced RAG — Community Edition (image-only distribution)
+# Runs the 3 app services on top of an existing OpenGenie AI Stack.
+#   STACK_NETWORK         = your OpenGenie Docker network name (external)
+#   RAG_FILES_PATH        = host path of the shared RAG files dir (same one FileBrowser/n8n use)
+#   TIGERAI_IMAGE_PREFIX  = image registry/namespace (default ghcr.io/tigerai-taiwan)
+services:
+  tigerai-nginx:
+    image: ${TIGERAI_IMAGE_PREFIX:-ghcr.io/tigerai-taiwan}/tigerai-rag-nginx:latest
+    container_name: tigerai-nginx
+    ports:
+      - "8088:80"
+    environment:
+      - TZ=Asia/Taipei
+    # add nginx worker to gid=1000 group so it can read the RAG files (640/750) written by n8n
+    command:
+      - sh
+      - -c
+      - 'G=$$(awk -F: ''$$3==1000{print $$1; exit}'' /etc/group); [ -z "$$G" ] && addgroup -g 1000 nginxfiles && G=nginxfiles; addgroup nginx "$$G" 2>/dev/null; exec nginx -g ''daemon off;'''
+    volumes:
+      # original RAG files (read-only) → /files/ download links in answers
+      - ${RAG_FILES_PATH:-./data/rag}:/usr/share/nginx/files:ro
+    networks:
+      - stack
+    depends_on:
+      - tigerai-backend
+    restart: unless-stopped
+
+  tigerai-backend:
+    image: ${TIGERAI_IMAGE_PREFIX:-ghcr.io/tigerai-taiwan}/tigerai-rag-backend:latest
+    container_name: tigerai-backend
+    expose:
+      - "3060"
+    environment:
+      - TZ=Asia/Taipei
+    env_file:
+      - ./.env
+    networks:
+      - stack
+    restart: unless-stopped
+
+  tigerai-splitter:
+    image: ${TIGERAI_IMAGE_PREFIX:-ghcr.io/tigerai-taiwan}/tigerai-rag-splitter:latest
+    container_name: tigerai-splitter
+    environment:
+      - TZ=Asia/Taipei
+    expose:
+      - "8000"
+    volumes:
+      # MUST point at the same dir as FileBrowser/n8n, or Step0-split files won't be visible
+      - ${RAG_FILES_PATH:-./data/rag}:/srv
+    networks:
+      - stack
+    restart: unless-stopped
+
+networks:
+  stack:
+    external: true
+    name: ${STACK_NETWORK:-opengenie-net}

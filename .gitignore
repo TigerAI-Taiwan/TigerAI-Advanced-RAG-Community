@@ -1,0 +1,56 @@
+# ── Image-only distribution ──
+# This public repo ships a DEPLOY BUNDLE only (compose + n8n workflows + OWUI pipes + docs).
+# The application source is distributed as Docker images, NOT here. Source stays local
+# (used to build the images) but is excluded from the public repo.
+backend/
+splitter/
+app.js
+index.html
+styles.css
+nginx.conf
+logo.png
+Dockerfile
+check_qdrant.js
+src/
+docs/
+deployments/n8n_rebuild_2026-05-25/
+deployments/300_200_v2_0.png
+deployments/filebrowser.json
+deployments/.env.example
+
+# ── Secrets / env (含真實 API key，絕不可進版控) ──
+.env
+*.env
+backend/.env
+!*.env.example
+!.env.example
+
+# ── n8n / DB dump、execution / workflow export ──
+_all.json
+_el.json
+_wl.json
+backend_test.json
+*-execution*.json
+*-export*.json
+*_export.json
+*.dump
+*.sql.bak
+
+# ── 執行期資料 / OS ──
+deployments/data/
+data/
+**/__pycache__/
+*.pyc
+node_modules/
+*.log
+logs/
+*.bak
+.DS_Store
+Thumbs.db
+
+# full-version docs (describe 地端/佇列 — not in cloud-only edition)
+USERGUIDE.md
+TROUBLESHOOTING.md
+產品使用情境.md
+產品使用手冊.md
+產品功能書.md

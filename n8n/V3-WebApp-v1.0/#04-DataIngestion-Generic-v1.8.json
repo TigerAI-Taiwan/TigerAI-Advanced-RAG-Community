@@ -1,0 +1,537 @@
+{
+  "name": "#04-DataIngestion-Generic-v1.8",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tigerai-step4",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "n-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "tigerai-step4-ingest"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "folder_path",
+              "value": "={{ $json.body.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b",
+              "name": "folder_id",
+              "value": "={{ $json.body.folder_path.split('/').filter(p => p !== '')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "project_name",
+              "value": "={{ $json.body.project_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "collection_name",
+              "value": "={{ $json.body.collection_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "ollama_url",
+              "value": "={{ $json.body.ollama_url || 'http://ollama:11434' }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "ollama_embedding_model",
+              "value": "={{ $json.body.ollama_embedding_model }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "cloud_ai_url",
+              "value": "={{ $json.body.cloud_ai_url || 'https://api.openai.com/v1' }}",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "cloud_ai_key",
+              "value": "={{ $json.body.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "cloud_ai_embedding_model",
+              "value": "={{ $json.body.cloud_ai_embedding_model }}",
+              "type": "string"
+            },
+            {
+              "id": "a9",
+              "name": "qdrant_url",
+              "value": "={{ $json.body.qdrant_url || 'http://qdrant-tigerai:6333' }}",
+              "type": "string"
+            },
+            {
+              "id": "a10",
+              "name": "qdrant_key",
+              "value": "={{ $json.body.qdrant_key || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a11",
+              "name": "backend_url",
+              "value": "={{ $json.body.backend_url || 'http://tigerai-backend:3060' }}",
+              "type": "string"
+            },
+            {
+              "id": "a12",
+              "name": "embedding_provider",
+              "value": "={{ $json.body.ollama_embedding_model ? 'ollama' : 'cloud_ai' }}",
+              "type": "string"
+            },
+            {
+              "id": "aiprov",
+              "name": "ai_provider",
+              "value": "={{ $json.body.ai_provider || 'cloud' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-vars",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/home/node/.n8n-files/RAG/{{ $json.folder_id }}/Step2-MD2JSON/*.json",
+        "options": {}
+      },
+      "id": "n-read",
+      "name": "Read JSON Files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "id": "n-parse",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.4 2026-04-21: 拿掉 require('crypto')（n8n sandbox 擋下），改內嵌 pure-JS SHA-1 + UUID v5\nconst vars = $('Extract Payload').first().json;\nconst NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';\n\nfunction sha1(bytes) {\n  const rotl = (n, x) => ((x << n) | (x >>> (32 - n))) >>> 0;\n  const H = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];\n  const ml = bytes.length * 8;\n  const arr = Array.from(bytes);\n  arr.push(0x80);\n  while ((arr.length % 64) !== 56) arr.push(0);\n  for (let i = 0; i < 4; i++) arr.push(0);\n  for (let i = 3; i >= 0; i--) arr.push((ml >>> (i * 8)) & 0xff);\n  const words = [];\n  for (let i = 0; i < arr.length; i += 4) {\n    words.push(((arr[i] << 24) | (arr[i+1] << 16) | (arr[i+2] << 8) | arr[i+3]) >>> 0);\n  }\n  for (let i = 0; i < words.length; i += 16) {\n    const w = words.slice(i, i + 16);\n    for (let j = 16; j < 80; j++) w[j] = rotl(1, w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16]);\n    let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4];\n    for (let j = 0; j < 80; j++) {\n      let f, k;\n      if (j < 20)      { f = (b & c) | ((~b) & d);      k = 0x5A827999; }\n      else if (j < 40) { f = b ^ c ^ d;                  k = 0x6ED9EBA1; }\n      else if (j < 60) { f = (b & c) | (b & d) | (c & d);k = 0x8F1BBCDC; }\n      else             { f = b ^ c ^ d;                  k = 0xCA62C1D6; }\n      const t = (rotl(5, a) + f + e + k + w[j]) >>> 0;\n      e = d; d = c; c = rotl(30, b); b = a; a = t;\n    }\n    H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0; H[4] = (H[4] + e) >>> 0;\n  }\n  const out = new Uint8Array(20);\n  for (let i = 0; i < 5; i++) {\n    out[i*4]   = (H[i] >>> 24) & 0xff;\n    out[i*4+1] = (H[i] >>> 16) & 0xff;\n    out[i*4+2] = (H[i] >>> 8)  & 0xff;\n    out[i*4+3] =  H[i]         & 0xff;\n  }\n  return out;\n}\n\nfunction uuidV5(name, namespace) {\n  const hex = namespace.replace(/-/g, '');\n  const nsBytes = new Uint8Array(16);\n  for (let i = 0; i < 16; i++) nsBytes[i] = parseInt(hex.substr(i*2, 2), 16);\n  const nameBytes = new TextEncoder().encode(name);\n  const msg = new Uint8Array(nsBytes.length + nameBytes.length);\n  msg.set(nsBytes, 0);\n  msg.set(nameBytes, nsBytes.length);\n  const digest = sha1(msg);\n  digest[6] = (digest[6] & 0x0f) | 0x50;\n  digest[8] = (digest[8] & 0x3f) | 0x80;\n  const h = Array.from(digest.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join('');\n  return `${h.substring(0,8)}-${h.substring(8,12)}-${h.substring(12,16)}-${h.substring(16,20)}-${h.substring(20,32)}`;\n}\n\nconst out = [];\nfor (const fileItem of $input.all()) {\n  let chunks;\n  if (Array.isArray(fileItem.json)) chunks = fileItem.json;\n  else if (Array.isArray(fileItem.json.data)) chunks = fileItem.json.data;\n  else if (fileItem.json.text) chunks = [fileItem.json];\n  else continue;\n\n  const firstMetadata = chunks[0]?.metadata || {};\n  const sourceFile = firstMetadata.source_file || fileItem.json.file_name || 'unknown';\n  const originalFile = sourceFile.replace(/\\.(md|markdown)$/i, '.pdf');\n\n  const createDate = new Date().toISOString().slice(0, 10); // yyyy-MM-dd (UTC)\n  chunks.forEach((chunk, idx) => {\n    const pointId = uuidV5(`${originalFile}#${idx}`, NAMESPACE);\n    const payload = {\n      text: chunk.text || '',\n      original_file: originalFile,\n      source_file: sourceFile,\n      file_name: originalFile,      // v1.6 2026-04-21: 前代 相容欄位名\n      chunk_index: idx,\n      project_name: vars.project_name,\n      create_date: createDate,      // v1.6 2026-04-21: 建立日期（對應 前代 $now.format('yyyy-MM-dd')）\n      ...(chunk.metadata || {}),\n      tags: chunk.tags || [],\n      suggested_questions: chunk.suggested_questions || []\n    };\n    out.push({\n      json: {\n        point_id: pointId,\n        text_to_embed: chunk.text || '',\n        qdrant_payload: payload,\n        chars: (chunk.text || '').length\n      }\n    });\n  });\n}\n\nreturn out;"
+      },
+      "id": "n-build-points",
+      "name": "Build Point IDs + Payloads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 4,
+        "options": {}
+      },
+      "id": "n-loop",
+      "name": "Loop (batch=4)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $('Extract Payload').first().json.ai_provider }}",
+              "rightValue": "local",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-if-provider",
+      "name": "Use Ollama Embed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.ollama_url }}/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Extract Payload').first().json.ollama_api_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $('Extract Payload').first().json.ollama_embedding_model }}\",\n  \"input\": {{ JSON.stringify($json.text_to_embed) }}\n}",
+        "options": {
+          "timeout": 60000
+        },
+        "contentType": "json"
+      },
+      "id": "n-embed-ollama",
+      "name": "Ollama Embed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.cloud_ai_url }}/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Extract Payload').first().json.cloud_ai_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $('Extract Payload').first().json.cloud_ai_embedding_model }}\",\n  \"input\": {{ JSON.stringify($json.text_to_embed) }}\n}",
+        "options": {
+          "timeout": 60000
+        },
+        "contentType": "json"
+      },
+      "id": "n-embed-cloud",
+      "name": "Cloud AI Embed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine embedding response (either Ollama or OpenAI shape) with prepared points\nconst embedResponses = $input.all();\nconst pointItems = $('Loop (batch=4)').all();\n\nreturn embedResponses.map((r, i) => {\n  const src = pointItems[i].json;\n  const body = r.json || {};\n  let vec = null;\n  if (body.embeddings && Array.isArray(body.embeddings)) {\n    vec = Array.isArray(body.embeddings[0]) ? body.embeddings[0] : body.embeddings;\n  } else if (body.embedding) {\n    vec = body.embedding;\n  }\n  if (!vec && body.data && Array.isArray(body.data) && body.data[0]?.embedding) {\n    vec = body.data[0].embedding;\n  }\n  if (!vec) throw new Error(`Embedding missing for chunk ${src.point_id}: ${JSON.stringify(body).substring(0, 200)}`);\n  return {\n    json: {\n      id: src.point_id,\n      vector: vec,\n      payload: src.qdrant_payload\n    }\n  };\n});"
+      },
+      "id": "n-assemble",
+      "name": "Assemble Qdrant Points",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $('Extract Payload').first().json.qdrant_url }}/collections/{{ $('Extract Payload').first().json.collection_name }}/points?wait=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "api-key",
+              "value": "={{ $('Extract Payload').first().json.qdrant_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"points\": {{ JSON.stringify($input.all().map(i => i.json)) }}\n}",
+        "options": {
+          "timeout": 60000
+        },
+        "contentType": "json"
+      },
+      "id": "n-qdrant",
+      "name": "Qdrant Upsert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.5 2026-04-21: 直接從 Build Point IDs 節點取資料算 stats（不用 $workflow.staticData）\nconst vars = $('Extract Payload').first().json;\nconst points = $('Build Point IDs + Payloads').all();\nconst total = points.length;\nconst charsArr = points.map(p => p.json.chars || 0);\nconst maxChars = charsArr.length ? Math.max(...charsArr) : 0;\nconst avgChars = total ? Math.round(charsArr.reduce((s, x) => s + x, 0) / total) : 0;\n\nreturn [{\n  json: {\n    folder_path: vars.folder_path,\n    project_name: vars.project_name,\n    collection_name: vars.collection_name,\n    status: 'Step 43 進行中',\n    chunk_count: total,\n    embedding_provider: vars.embedding_provider,\n    message: `Ingested ${total} chunks via ${vars.embedding_provider} (max ${maxChars} chars, avg ${avgChars})`\n  }\n}];"
+      },
+      "id": "n-build-callback",
+      "name": "Build Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.backend_url }}/webhook/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 15000
+        },
+        "contentType": "json"
+      },
+      "id": "n-callback",
+      "name": "Callback to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# #04 - DataIngestion Generic (v1.8)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — 改為自動偵測 provider（對齊 #02/#03/#05）：`ollama_embedding_model` 空 → 自動走 Cloud AI `/embeddings`，不再依賴 backend 預先設 `embedding_provider` 旗標\n- **v1.2 (2026-04-21)** — 加 `folder_id` 防呆\n- **v1.1 (2026-04-21)** — 新增 Cloud AI embedding 備援（IF 依 `embedding_provider` 旗標分流）\n- **v1.0 (2026-04-20)** — 初版\n\n**Provider 切換 (v1.3):**\n```\nUse Ollama Embed? IF ollama_embedding_model notEmpty\n  true  → Ollama /api/embed\n  false → Cloud AI /embeddings (Bearer cloud_ai_key)\n```\n`embedding_provider` 變成 Set 節點自動計算並記到 callback 訊息用。\n\n**Trigger:** `POST /webhook/tigerai-step4`\n\n**向量維度注意:** Qdrant collection 的 `vectors.size` 必須匹配所選 embedding model：\n- Ollama `qwen3-embedding-8b` → 4096\n- OpenAI `text-embedding-3-small` → 1536\n- OpenAI `text-embedding-3-large` → 3072\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"collection_name\": \"labor_law\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_embedding_model\": \"\",          // 空 → 走 cloud\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_embedding_model\": \"text-embedding-3-large\",\n  \"qdrant_url\": \"http://qdrant-tigerai:6333\",\n  \"qdrant_key\": \"\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n- v1.7 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）",
+        "height": 560,
+        "width": 520,
+        "color": 4
+      },
+      "id": "n-note",
+      "name": "Workflow Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -540,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Read JSON Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read JSON Files": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Build Point IDs + Payloads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Point IDs + Payloads": {
+      "main": [
+        [
+          {
+            "node": "Loop (batch=4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop (batch=4)": {
+      "main": [
+        [
+          {
+            "node": "Build Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Use Ollama Embed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Ollama Embed?": {
+      "main": [
+        [
+          {
+            "node": "Ollama Embed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cloud AI Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Embed": {
+      "main": [
+        [
+          {
+            "node": "Assemble Qdrant Points",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cloud AI Embed": {
+      "main": [
+        [
+          {
+            "node": "Assemble Qdrant Points",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Qdrant Points": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Upsert": {
+      "main": [
+        [
+          {
+            "node": "Loop (batch=4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Callback": {
+      "main": [
+        [
+          {
+            "node": "Callback to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

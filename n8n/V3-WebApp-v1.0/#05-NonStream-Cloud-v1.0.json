@@ -1,0 +1,289 @@
+{
+  "name": "#05-NonStream-Cloud-v1.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tigerai-query-cloud",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        200
+      ],
+      "webhookId": "tigerai-query-cloud"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p-chat",
+              "name": "chatInput",
+              "value": "={{ $json.body.chatInput || $json.body.question || $json.body.query }}",
+              "type": "string"
+            },
+            {
+              "id": "p-app",
+              "name": "app_name",
+              "value": "={{ $json.body.app_name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "p-coll",
+              "name": "collection_name",
+              "value": "={{ $json.body.collection_name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "p-sess",
+              "name": "sessionId",
+              "value": "={{ $json.body.sessionId || $json.body.session_id || 'default' }}",
+              "type": "string"
+            },
+            {
+              "id": "p-mink",
+              "name": "min_keywords",
+              "value": "={{ $json.body.min_keywords || 1 }}",
+              "type": "number"
+            },
+            {
+              "id": "p-prov",
+              "name": "provider",
+              "value": "cloud",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prep",
+      "name": "Prep Core Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -360,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "0UQpFS2dW2As1JGL",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "core",
+      "name": "Execute RAG Core",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -150,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-r",
+              "leftValue": "={{ $json.route }}",
+              "rightValue": "rag",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route",
+      "name": "RAG or Direct?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        60,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "WePsMURN28E7ECrI",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "sub",
+      "name": "Execute Sub-Chat-Cloud",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        280,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// RAG 回應整形（Sub-Chat 回來後仍帶 core 的 sources/hits/keywords）\nreturn [{ json: { output: $json.output || '', mode: 'rag', sources: $json.sources || [], hits: $json.hits || 0, keywords_used: $json.keywords_used || [], sessionId: $json.sessionId } }];"
+      },
+      "id": "shrag",
+      "name": "Shape RAG Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Direct 模式：core 內 Agent1 已產生完整答案\nreturn [{ json: { output: $json.answer || '', mode: 'direct', sources: [], hits: 0, keywords_used: [], sessionId: $json.sessionId } }];"
+      },
+      "id": "shdir",
+      "name": "Shape Direct Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "resp",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# #05-NonStream-Cloud-v1.0 (2026-05-25)\n\n非串流查詢入口(雲端)。薄入口:Execute #05-RAG-Core 取檢索結果 → Sub-Chat-Cloud 回答。\n\n**Webhook:** POST /webhook/tigerai-query-cloud\n**provider:** cloud(寫死;傳給 core 決定 embed/回答模型)\n**核心:** #05-RAG-Core-v1.0 (0UQpFS2dW2As1JGL)\n\n## 版本歷史\n- v1.0 (2026-05-25): 由 #05-Query-v1.10 拆出(共用檢索核心 + 4 薄入口架構)。多 app 共用此入口,靠 app_name 區分 collection。",
+        "height": 300,
+        "width": 520,
+        "color": 5
+      },
+      "id": "note",
+      "name": "Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -160
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prep Core Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Core Input": {
+      "main": [
+        [
+          {
+            "node": "Execute RAG Core",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute RAG Core": {
+      "main": [
+        [
+          {
+            "node": "RAG or Direct?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG or Direct?": {
+      "main": [
+        [
+          {
+            "node": "Execute Sub-Chat-Cloud",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shape Direct Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Sub-Chat-Cloud": {
+      "main": [
+        [
+          {
+            "node": "Shape RAG Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape RAG Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Direct Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

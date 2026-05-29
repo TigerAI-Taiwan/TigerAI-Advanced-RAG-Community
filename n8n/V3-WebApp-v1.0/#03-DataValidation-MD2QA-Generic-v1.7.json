@@ -1,0 +1,550 @@
+{
+  "name": "#03-DataValidation-MD2QA-Generic-v1.7",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tigerai-step3",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "n-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "tigerai-step3-md2qa"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "folder_path",
+              "value": "={{ $json.body.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b",
+              "name": "folder_id",
+              "value": "={{ $json.body.folder_path.split('/').filter(p => p !== '')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "project_name",
+              "value": "={{ $json.body.project_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "ollama_url",
+              "value": "={{ $json.body.ollama_url || 'http://ollama:11434' }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "ollama_main_model",
+              "value": "={{ $json.body.ollama_main_model }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "cloud_ai_url",
+              "value": "={{ $json.body.cloud_ai_url || 'https://api.openai.com/v1' }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "cloud_ai_key",
+              "value": "={{ $json.body.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "cloud_ai_model",
+              "value": "={{ $json.body.cloud_ai_model }}",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "backend_url",
+              "value": "={{ $json.body.backend_url || 'http://tigerai-backend:3060' }}",
+              "type": "string"
+            },
+            {
+              "id": "a9",
+              "name": "question_count",
+              "value": "={{ $json.body.question_count || 10 }}",
+              "type": "number"
+            },
+            {
+              "id": "aiprov",
+              "name": "ai_provider",
+              "value": "={{ $json.body.ai_provider || 'cloud' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-vars",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/home/node/.n8n-files/RAG/{{ $('Extract Payload').first().json.folder_id }}/Step1-File2MD/*.md",
+        "options": {}
+      },
+      "id": "n-read",
+      "name": "Read MD Files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "destinationKey": "md_text",
+        "options": {}
+      },
+      "id": "n-extract-txt",
+      "name": "Extract MD Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.4 2026-04-21: 用 Extract From File 原生 node 的 md_text 輸出（它會正確處理 filesystem binary mode）。\n// 檔名 prefix 直接用 payload 帶進來的 project_name。\nconst items = $input.all();\nconst projectName = $('Extract Payload').first().json.project_name || 'unknown';\nconst charLimit = 25000;\nconst perFile = Math.max(1500, Math.floor(charLimit / Math.max(1, items.length)));\nlet combined = '';\nlet remaining = charLimit;\nconst fileNames = [];\nfor (const it of items) {\n  if (remaining <= 0) break;\n  const name = it.binary?.data?.fileName || it.json?.fileName || 'unknown.md';\n  const content = (it.json?.md_text || '').toString();\n  if (!content) continue;\n  const slice = content.length > perFile ? content.substring(0, perFile) + '\\n...[truncated]' : content;\n  combined += `\\n\\n===== FILE: ${name} =====\\n${slice}`;\n  remaining -= slice.length;\n  fileNames.push(name);\n}\nif (!combined) throw new Error('Extract From File 沒抽出任何文字');\nreturn [{ json: { combined, file_count: fileNames.length, files: fileNames, prefix: projectName } }];"
+      },
+      "id": "n-merge",
+      "name": "Merge MD Contents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cp1",
+              "leftValue": "={{ $('Extract Payload').first().json.ai_provider }}",
+              "rightValue": "local",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-if-provider",
+      "name": "Use Ollama?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.2 Accept both Ollama and OpenAI-compatible response shapes\nconst r = $input.first().json;\nconst raw = r.message?.content || r.choices?.[0]?.message?.content || r.response || '';\nlet s = raw.trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(s); }\ncatch (e) {\n  const m = s.match(/\\[[\\s\\S]*\\]/);\n  if (!m) throw new Error('LLM returned non-JSON: ' + s.substring(0, 200));\n  parsed = JSON.parse(m[0]);\n}\nif (!Array.isArray(parsed)) throw new Error('Expected JSON array');\nreturn [{ json: { questions: parsed, count: parsed.length } }];"
+      },
+      "id": "n-parse",
+      "name": "Parse QA JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.4 2026-04-21: 檔名 prefix 直接吃 payload 帶進來的 project_name（Merge 節點已轉給 $json.prefix）\nconst qa = $input.first().json.questions || [];\nconst prefix = $('Merge MD Contents').first().json.prefix || 'unknown';\nconst outName = `${prefix}-000-manual-test-qa.json`;\nconst pretty = JSON.stringify(qa, null, 2);\nreturn [{\n  json: { file_name: outName, count: qa.length, questions: qa },\n  binary: {\n    data: {\n      data: Buffer.from(pretty, 'utf8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: outName\n    }\n  }\n}];"
+      },
+      "id": "n-build-qa-file",
+      "name": "Build QA JSON File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/home/node/.n8n-files/RAG/{{ $('Extract Payload').first().json.folder_id }}/Step3-MD2QA/{{ $json.file_name }}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "n-write-qa",
+      "name": "Write QA to Project Root",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.backend_url }}/qc/save-test-questions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"folder_path\": \"{{ $('Extract Payload').first().json.folder_path }}\",\n  \"project_name\": \"{{ $('Extract Payload').first().json.project_name }}\",\n  \"source\": \"n8n_step3\",\n  \"questions\": {{ JSON.stringify($('Parse QA JSON').first().json.questions) }}\n}",
+        "options": {
+          "timeout": 30000
+        },
+        "contentType": "json"
+      },
+      "id": "n-save",
+      "name": "Save to Backend DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.3 2026-04-21: 通知 backend 更新專案狀態\nconst vars = $('Extract Payload').first().json;\nconst qa = $('Parse QA JSON').first().json;\nreturn [{\n  json: {\n    folder_path: vars.folder_path,\n    project_name: vars.project_name,\n    collection_name: '',\n    status: 'Step 43 進行中',\n    chunk_count: qa.count || 0,\n    message: `Generated ${qa.count || 0} QA questions`\n  }\n}];"
+      },
+      "id": "n-build-cb",
+      "name": "Build Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.backend_url }}/webhook/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 15000
+        },
+        "contentType": "json"
+      },
+      "id": "n-cb",
+      "name": "Callback to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# #03 - DataValidation MD→QA Generic (v1.7)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — 修正「n8n 跑完但 backend 狀態卡進行中」：補上 Callback to Backend 節點打 `/webhook/n8n`（status='Step 43 進行中'），orchestrator 才能串到 #04 或把單步觸發判為已完成\n- **v1.2 (2026-04-21)** — 新增 Cloud AI 備援\n- **v1.1 (2026-04-21)** — 加 `folder_id` 防呆；10 題 QA 除了寫 DB 也寫檔\n- **v1.0 (2026-04-20)** — 初版\n\n**Provider 切換:**\n```\nUse Ollama? IF ollama_main_model notEmpty\n  true  → Ollama /api/chat\n  false → Cloud AI /chat/completions\n```\n\n**Callback 路徑 (v1.3 新增):**\nWrite QA → Save to Backend DB (`/qc/save-test-questions` 存題庫)\n             → Build Callback → Callback to Backend (`/webhook/n8n` 更新專案狀態)\n\n**Trigger:** `POST /webhook/tigerai-step3`\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_main_model\": \"\",              // 空 → 走 cloud\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_model\": \"gpt-5-mini\",\n  \"backend_url\": \"http://tigerai-backend:3060\",\n  \"question_count\": 10\n}\n```\n- v1.5 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n- v1.7 (2026-05-24): chat 改用通用子工作流 Sub-Chat-Local/Cloud（IF ai_provider 分流，原生 agent）",
+        "height": 460,
+        "width": 500,
+        "color": 4
+      },
+      "id": "n-note",
+      "name": "Workflow Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -540,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uc",
+              "name": "user_content",
+              "value": "={{ $json.combined }}",
+              "type": "string"
+            },
+            {
+              "id": "sp",
+              "name": "system_prompt",
+              "value": "=你是 RAG 知識庫的驗證專家。根據提供的文件內容，產出 {{ $('Extract Payload').first().json.question_count }} 道人工驗證用問答題。\n\n嚴格輸出要求：\n- 只輸出合法 JSON 陣列（Array），不要任何 markdown code fence、前言或後記。\n- 每個元素為物件：{\"question\": \"...\", \"expected_answer\": \"...\", \"source_file\": \"...\"}\n- question 用口語化問句（像人類實際會問的）。\n- expected_answer 必須基於原始文件可驗證的事實，1~3 句話精煉說明。\n- source_file 指出該題主要引用的檔名（來自 ===== FILE: xxx ===== 標頭）。\n- 涵蓋不同檔案 / 不同主題，避免壓在同一份文件。",
+              "type": "string"
+            },
+            {
+              "id": "md",
+              "name": "model",
+              "value": "={{ $('Extract Payload').first().json.ai_provider === 'local' ? $('Extract Payload').first().json.ollama_main_model : $('Extract Payload').first().json.cloud_ai_model }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "bli",
+      "name": "Build LLM Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "5nw0j2NE7Pj6eAag",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "exloc",
+      "name": "Execute Sub-Chat-Local",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "WePsMURN28E7ECrI",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "excld",
+      "name": "Execute Sub-Chat-Cloud",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Read MD Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read MD Files": {
+      "main": [
+        [
+          {
+            "node": "Extract MD Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract MD Text": {
+      "main": [
+        [
+          {
+            "node": "Merge MD Contents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge MD Contents": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Ollama?": {
+      "main": [
+        [
+          {
+            "node": "Execute Sub-Chat-Local",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute Sub-Chat-Cloud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse QA JSON": {
+      "main": [
+        [
+          {
+            "node": "Build QA JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build QA JSON File": {
+      "main": [
+        [
+          {
+            "node": "Write QA to Project Root",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write QA to Project Root": {
+      "main": [
+        [
+          {
+            "node": "Save to Backend DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Backend DB": {
+      "main": [
+        [
+          {
+            "node": "Build Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Callback": {
+      "main": [
+        [
+          {
+            "node": "Callback to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LLM Input": {
+      "main": [
+        [
+          {
+            "node": "Use Ollama?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Sub-Chat-Local": {
+      "main": [
+        [
+          {
+            "node": "Parse QA JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Sub-Chat-Cloud": {
+      "main": [
+        [
+          {
+            "node": "Parse QA JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

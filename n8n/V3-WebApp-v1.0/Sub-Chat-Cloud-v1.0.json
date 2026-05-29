@@ -1,0 +1,123 @@
+{
+  "name": "Sub-Chat-Cloud-v1.0",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trig",
+      "name": "When Called",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.user_content }}",
+        "options": {
+          "systemMessage": "={{ $json.system_prompt || '你是專業 RAG 資料處理助手。' }}"
+        }
+      },
+      "id": "agent",
+      "name": "Chat",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": "={{ $json.model }}",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "llm",
+      "name": "LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        260,
+        210
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "j9NcDQ1CpW9X6v2Z",
+          "name": "OpenAiaccount"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inp=$('When Called').first().json;\nreturn $input.all().map((r,i)=>({json: Object.assign({}, $('When Called').all()[i] ? $('When Called').all()[i].json : inp, {output: r.json.output || ''})}));"
+      },
+      "id": "shape",
+      "name": "Shape Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Sub-Chat-Cloud v1.0 (2026-05-24)\n通用雲端 chat 子工作流。被 #02/#03/#05 用 Execute Workflow 呼叫。\n輸入: {system_prompt, user_content, model(=cloud_ai_model)} → 回 {...輸入, output}\n原生 agent + lmChatOpenAi(OpenAiaccount credential)",
+        "height": 220,
+        "width": 420
+      },
+      "id": "note",
+      "name": "Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -260
+      ]
+    }
+  ],
+  "connections": {
+    "When Called": {
+      "main": [
+        [
+          {
+            "node": "Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Chat",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat": {
+      "main": [
+        [
+          {
+            "node": "Shape Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

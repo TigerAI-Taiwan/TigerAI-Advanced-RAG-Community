@@ -1,0 +1,706 @@
+{
+  "name": "#02-DataProcessing-MD2JSON-Generic-v1.5",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tigerai-step2",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "n-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "tigerai-step2-md2json"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "folder_path",
+              "value": "={{ $json.body.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b",
+              "name": "folder_id",
+              "value": "={{ $json.body.folder_path.split('/').filter(p => p !== '')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "project_name",
+              "value": "={{ $json.body.project_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "collection_name",
+              "value": "={{ $json.body.collection_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "system_prompt",
+              "value": "={{ $json.body.system_prompt }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "ollama_url",
+              "value": "={{ $json.body.ollama_url || 'http://ollama:11434' }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "ollama_main_model",
+              "value": "={{ $json.body.ollama_main_model }}",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "cloud_ai_url",
+              "value": "={{ $json.body.cloud_ai_url || 'https://api.openai.com/v1' }}",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "cloud_ai_key",
+              "value": "={{ $json.body.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "a9",
+              "name": "cloud_ai_model",
+              "value": "={{ $json.body.cloud_ai_model }}",
+              "type": "string"
+            },
+            {
+              "id": "aa",
+              "name": "backend_url",
+              "value": "={{ $json.body.backend_url || 'http://tigerai-backend:3060' }}",
+              "type": "string"
+            },
+            {
+              "id": "aiprov",
+              "name": "ai_provider",
+              "value": "={{ $json.body.ai_provider || 'cloud' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-vars",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.system_prompt }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-if-prompt",
+      "name": "Has system_prompt?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/home/node/.n8n-files/RAG/{{ $('Extract Payload').first().json.folder_id }}/Step1-File2MD/*.md",
+        "options": {}
+      },
+      "id": "n-read",
+      "name": "Read MD Files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        600,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "n-loop",
+      "name": "Loop Per File",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        800,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "destinationKey": "md_content",
+        "options": {}
+      },
+      "id": "n-extract",
+      "name": "Extract MD Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cp1",
+              "leftValue": "={{ $('Extract Payload').first().json.ai_provider }}",
+              "rightValue": "local",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-if-provider",
+      "name": "Use Ollama?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1180,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.2 Parse LLM output from either Ollama or OpenAI-compatible Cloud AI.\n// Ollama returns { message: { content } }; OpenAI returns { choices: [{ message: { content } }] }.\nconst vars = $('Extract Payload').first().json;\nconst llmItems = $input.all();\nconst fileItems = $('Loop Per File').all();\n\nreturn llmItems.map((r, i) => {\n  const rawContent = r.json.output\n    || r.json.message?.content\n    || r.json.choices?.[0]?.message?.content\n    || r.json.response\n    || '';\n  // Strip any accidental markdown code fences (``` or ```json)\n  let cleaned = rawContent.trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  let parsed;\n  try {\n    parsed = JSON.parse(cleaned);\n  } catch (e) {\n    const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n    if (!match) throw new Error(`LLM returned non-JSON: ${cleaned.substring(0, 200)}`);\n    parsed = JSON.parse(match[0]);\n  }\n  if (!Array.isArray(parsed)) throw new Error('Expected JSON array from LLM');\n\n  const sourceFile = fileItems[i]?.binary?.data?.fileName\n    || fileItems[i]?.json?.fileName\n    || fileItems[i]?.json?.name\n    || `chunk_${i}.md`;\n  parsed = parsed.map(chunk => ({\n    ...chunk,\n    metadata: { ...(chunk.metadata || {}), source_file: sourceFile }\n  }));\n\n  const outputName = sourceFile.replace(/\\.md$/i, '.json');\n  return {\n    json: { file_name: outputName, chunk_count: parsed.length },\n    binary: {\n      data: {\n        data: Buffer.from(JSON.stringify(parsed, null, 2)).toString('base64'),\n        mimeType: 'application/json',\n        fileName: outputName\n      }\n    }\n  };\n});"
+      },
+      "id": "n-parse-json",
+      "name": "Parse + Tag JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/home/node/.n8n-files/RAG/{{ $('Extract Payload').first().json.folder_id }}/Step2-MD2JSON/{{ $json.file_name }}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "n-write",
+      "name": "Write JSON File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// After all files processed, callback to backend\nconst vars = $('Extract Payload').first().json;\nconst processed = $input.all();\nconst total = processed.reduce((s, x) => s + (x.json.chunk_count || 0), 0);\n\nreturn [{\n  json: {\n    folder_path: vars.folder_path,\n    project_name: vars.project_name,\n    collection_name: vars.collection_name,\n    status: 'Step 03 進行中',\n    chunk_count: total,\n    files_processed: processed.length,\n    message: `Processed ${processed.length} MD files → ${total} JSON chunks`\n  }\n}];"
+      },
+      "id": "n-build-cb",
+      "name": "Build Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Payload').first().json.backend_url }}/webhook/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 15000
+        },
+        "contentType": "json"
+      },
+      "id": "n-cb",
+      "name": "Callback to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// If no system_prompt in payload, fail fast with clear error\nreturn [{\n  json: {\n    error: 'system_prompt missing from webhook payload. Make sure the project has a rule_id set in projects_metadata.',\n    folder_path: $('Extract Payload').first().json.folder_path,\n    status: 'error'\n  }\n}];"
+      },
+      "id": "n-error",
+      "name": "Error: No Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# #02 - DataProcessing MD→JSON Generic (v1.5)\n\n## 版本歷史\n- **v1.2 (2026-04-21)** — 新增 Cloud AI 備援：`ollama_main_model` 空字串時自動切到 OpenAI-compatible `/chat/completions`（URL: `cloud_ai_url`, key: `cloud_ai_key`, model: `cloud_ai_model`）。Parser 同時支援 Ollama (`message.content`) 與 OpenAI (`choices[0].message.content`) 回傳格式。\n- **v1.1 (2026-04-21)** — 對齊 前代 邏輯：`folder_id = folder_path.split('/').filter(p=>p)[0]` 取主目錄；讀 `/RAG/{folder_id}/Step1-File2MD/*.md`，寫 `/RAG/{folder_id}/Step2-MD2JSON/*.json`\n- **v1.0 (2026-04-20)** — 初版。取代 前代 @002 + @003：system_prompt 由 Rule 動態帶入；跳過 Step2-DataEng；Ollama 設定全部走 payload\n\n**Provider 切換邏輯 (v1.2):**\n```\nUse Ollama? IF ollama_main_model notEmpty\n  true  → Ollama Chat (/api/chat)\n  false → Cloud AI Chat (/chat/completions, Bearer cloud_ai_key)\n```\n同一個 Parse + Tag JSON 節點接兩條線，所以下游 Write + Callback 完全共用。\n\n**Input body (critical fields):**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"system_prompt\": \"# Role...\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_main_model\": \"qwen3:32b\",        // 空 → 用 cloud_ai\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_model\": \"gpt-5-mini\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n\n**Temperature 0.2** 兩邊一致；Ollama 額外給 `num_ctx=32768`。\n- v1.3 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n- v1.5 (2026-05-24): chat 改用通用子工作流 Sub-Chat-Local/Cloud（IF ai_provider 分流，原生 agent）",
+        "height": 520,
+        "width": 560,
+        "color": 4
+      },
+      "id": "n-note",
+      "name": "Workflow Guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uc",
+              "name": "user_content",
+              "value": "={{ $json.md_content }}",
+              "type": "string"
+            },
+            {
+              "id": "sp",
+              "name": "system_prompt",
+              "value": "={{ $('Extract Payload').first().json.system_prompt }}",
+              "type": "string"
+            },
+            {
+              "id": "md",
+              "name": "model",
+              "value": "={{ $('Extract Payload').first().json.ai_provider === 'local' ? $('Extract Payload').first().json.ollama_main_model : $('Extract Payload').first().json.cloud_ai_model }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "bli",
+      "name": "Build LLM Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "5nw0j2NE7Pj6eAag",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "exloc",
+      "name": "Execute Sub-Chat-Local",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "WePsMURN28E7ECrI",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "excld",
+      "name": "Execute Sub-Chat-Cloud",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uc",
+              "name": "user_content",
+              "value": "={{ $json.md_content }}",
+              "type": "string"
+            },
+            {
+              "id": "sp",
+              "name": "system_prompt",
+              "value": "={{ $('Extract Payload').first().json.system_prompt }}",
+              "type": "string"
+            },
+            {
+              "id": "md",
+              "name": "model",
+              "value": "={{ $('Extract Payload').first().json.ai_provider === 'local' ? $('Extract Payload').first().json.ollama_main_model : $('Extract Payload').first().json.cloud_ai_model }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "bli",
+      "name": "Build LLM Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "5nw0j2NE7Pj6eAag",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "exloc",
+      "name": "Execute Sub-Chat-Local",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "WePsMURN28E7ECrI",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "excld",
+      "name": "Execute Sub-Chat-Cloud",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "uc",
+              "name": "user_content",
+              "value": "={{ $json.md_content }}",
+              "type": "string"
+            },
+            {
+              "id": "sp",
+              "name": "system_prompt",
+              "value": "={{ $('Extract Payload').first().json.system_prompt }}",
+              "type": "string"
+            },
+            {
+              "id": "md",
+              "name": "model",
+              "value": "={{ $('Extract Payload').first().json.ai_provider === 'local' ? $('Extract Payload').first().json.ollama_main_model : $('Extract Payload').first().json.cloud_ai_model }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "bli",
+      "name": "Build LLM Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "5nw0j2NE7Pj6eAag",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "exloc",
+      "name": "Execute Sub-Chat-Local",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "WePsMURN28E7ECrI",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "excld",
+      "name": "Execute Sub-Chat-Cloud",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Has system_prompt?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has system_prompt?": {
+      "main": [
+        [
+          {
+            "node": "Read MD Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: No Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read MD Files": {
+      "main": [
+        [
+          {
+            "node": "Loop Per File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Per File": {
+      "main": [
+        [
+          {
+            "node": "Build Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract MD Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract MD Text": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Ollama?": {
+      "main": [
+        [
+          {
+            "node": "Execute Sub-Chat-Local",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute Sub-Chat-Cloud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Tag JSON": {
+      "main": [
+        [
+          {
+            "node": "Write JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write JSON File": {
+      "main": [
+        [
+          {
+            "node": "Loop Per File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Callback": {
+      "main": [
+        [
+          {
+            "node": "Callback to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LLM Input": {
+      "main": [
+        [
+          {
+            "node": "Use Ollama?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Sub-Chat-Local": {
+      "main": [
+        [
+          {
+            "node": "Parse + Tag JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Sub-Chat-Cloud": {
+      "main": [
+        [
+          {
+            "node": "Parse + Tag JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

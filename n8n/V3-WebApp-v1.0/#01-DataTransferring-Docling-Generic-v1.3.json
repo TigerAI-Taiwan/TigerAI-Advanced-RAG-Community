@@ -280,7 +280,7 @@
     },
     {
       "parameters": {
-        "content": "# #01 - Docling PDF→MD Generic (v1.3)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — Docling container 改名 `docling-intel` → `docling`（移除 Intel 專屬命名，支援 CPU / CUDA 兩種 image 變體）。default URL 跟進 `http://docling:5001`。\n- **v1.2 (2026-04-21)** — 對齊 前代 @001 邏輯：不論 webhook 收到 `/202604219586` 或 `/202604219586/Step1-File2MD`，都用 `folder_id = folder_path.split('/').filter(p=>p)[0]`（取第 1 段）當主目錄。讀寫路徑固定：讀 `/RAG/{folder_id}/*`，寫 `/RAG/{folder_id}/Step1-File2MD/*`。防止誤觸子資料夾按鈕導致讀錯位置。\n- **v1.1 (2026-04-21)** — 5 處關鍵修正（對齊 backend doclingConvertPdfToMd 最終版）：\n  1. URL `/convert` → `/v1/convert/file`（Docling Serve v1 正確路徑）\n  2. 檔案欄位 `file` → `files`（單/複數對 API 規範敏感）\n  3. 加 `image_export_mode=placeholder`（預設 `embedded` 會把 PDF 每頁渲染成 base64 塞 md，真文字被淹沒）\n  4. 加 `do_ocr=true` / `include_images=false` / `do_picture_classification=false` / `to_formats=md`\n  5. Response 讀 `document.md_content`（不是 `markdown`），加 fallback\n  6. Timeout 10 min → 30 min（對齊 backend）\n- **v1.0 (2026-04-20)** — 初版。從 前代 @001 改 generic\n\n**Trigger:** Webhook `POST /webhook/tigerai-step1`\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"project_name\": \"proj_A\",\n  \"collection_name\": \"labor_law\",\n  \"allowed_formats\": \"pdf\",\n  \"docling_url\": \"http://docling:5001\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n\n**Flow:**\n1. List all files at project root (not Step subfolders)\n2. Filter by allowed extensions (default pdf)\n3. Loop: POST each file to Docling `/convert`\n4. Write Docling's markdown to `/Step1-File2MD/{name}.md`\n5. Callback backend with status='Step 01 進行中'\n\n**Notes:**\n- Skips `_rag_rules/`, `_sample/`, `Step*` subfolders\n- Skips `000-*` completion reports\n- 10 minute timeout per file (large PDFs)\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n",
+        "content": "# #01 - Docling PDF→MD Generic (v1.3)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — Docling container 改名 `docling-intel` → `docling`（移除 Intel 專屬命名，支援 CPU / CUDA 兩種 image 變體）。default URL 跟進 `http://docling:5001`。\n- **v1.2 (2026-04-21)** — 對齊 前代 @001 邏輯：不論 webhook 收到 `/202604219586` 或 `/202604219586/Step1-File2MD`，都用 `folder_id = folder_path.split('/').filter(p=>p)[0]`（取第 1 段）當主目錄。讀寫路徑固定：讀 `/RAG/{folder_id}/*`，寫 `/RAG/{folder_id}/Step1-File2MD/*`。防止誤觸子資料夾按鈕導致讀錯位置。\n- **v1.1 (2026-04-21)** — 5 處關鍵修正（對齊 backend doclingConvertPdfToMd 最終版）：\n  1. URL `/convert` → `/v1/convert/file`（Docling Serve v1 正確路徑）\n  2. 檔案欄位 `file` → `files`（單/複數對 API 規範敏感）\n  3. 加 `image_export_mode=placeholder`（預設 `embedded` 會把 PDF 每頁渲染成 base64 塞 md，真文字被淹沒）\n  4. 加 `do_ocr=true` / `include_images=false` / `do_picture_classification=false` / `to_formats=md`\n  5. Response 讀 `document.md_content`（不是 `markdown`），加 fallback\n  6. Timeout 10 min → 30 min（對齊 backend）\n- **v1.0 (2026-04-20)** — 初版。從 前代 @001 改 generic\n\n**Trigger:** Webhook `POST /webhook/tigerai-step1`\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"project_name\": \"proj_A\",\n  \"collection_name\": \"labor_law\",\n  \"allowed_formats\": \"pdf\",\n  \"docling_url\": \"http://docling:5001\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n\n**Flow:**\n1. List all files at project root (not Step subfolders)\n2. Filter by allowed extensions (default pdf)\n3. Loop: POST each file to Docling `/convert`\n4. Write Docling's markdown to `/Step1-File2MD/{name}.md`\n5. Callback backend with status='Step 01 進行中'\n\n**Notes:**\n- Skips `_rag_rules/`, `_sample/`, `Step*` subfolders\n- Skips `000-*` completion reports\n- 10 minute timeout per file (large PDFs)\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)",
         "height": 380,
         "width": 460,
         "color": 4
@@ -403,16 +403,7 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": [
-    {
-      "name": "tigerai"
-    },
-    {
-      "name": "generic"
-    }
-  ]
+  }
 }

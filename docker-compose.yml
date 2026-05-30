@@ -8,7 +8,7 @@ services:
     image: ${TIGERAI_IMAGE_PREFIX:-ghcr.io/tigerai-taiwan}/tigerai-rag-nginx:latest
     container_name: tigerai-nginx
     ports:
-      - "8088:80"
+      - "${HOST_UI_PORT:-8088}:80"
     environment:
       - TZ=Asia/Taipei
     # add nginx worker to gid=1000 group so it can read the RAG files (640/750) written by n8n

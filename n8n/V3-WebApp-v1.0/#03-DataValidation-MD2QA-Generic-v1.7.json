@@ -332,7 +332,7 @@
     },
     {
       "parameters": {
-        "content": "# #03 - DataValidation MD→QA Generic (v1.7)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — 修正「n8n 跑完但 backend 狀態卡進行中」：補上 Callback to Backend 節點打 `/webhook/n8n`（status='Step 43 進行中'），orchestrator 才能串到 #04 或把單步觸發判為已完成\n- **v1.2 (2026-04-21)** — 新增 Cloud AI 備援\n- **v1.1 (2026-04-21)** — 加 `folder_id` 防呆；10 題 QA 除了寫 DB 也寫檔\n- **v1.0 (2026-04-20)** — 初版\n\n**Provider 切換:**\n```\nUse Ollama? IF ollama_main_model notEmpty\n  true  → Ollama /api/chat\n  false → Cloud AI /chat/completions\n```\n\n**Callback 路徑 (v1.3 新增):**\nWrite QA → Save to Backend DB (`/qc/save-test-questions` 存題庫)\n             → Build Callback → Callback to Backend (`/webhook/n8n` 更新專案狀態)\n\n**Trigger:** `POST /webhook/tigerai-step3`\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_main_model\": \"\",              // 空 → 走 cloud\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_model\": \"gpt-5-mini\",\n  \"backend_url\": \"http://tigerai-backend:3060\",\n  \"question_count\": 10\n}\n```\n- v1.5 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n- v1.7 (2026-05-24): chat 改用通用子工作流 Sub-Chat-Local/Cloud（IF ai_provider 分流，原生 agent）\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n",
+        "content": "# #03 - DataValidation MD→QA Generic (v1.7)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — 修正「n8n 跑完但 backend 狀態卡進行中」：補上 Callback to Backend 節點打 `/webhook/n8n`（status='Step 43 進行中'），orchestrator 才能串到 #04 或把單步觸發判為已完成\n- **v1.2 (2026-04-21)** — 新增 Cloud AI 備援\n- **v1.1 (2026-04-21)** — 加 `folder_id` 防呆；10 題 QA 除了寫 DB 也寫檔\n- **v1.0 (2026-04-20)** — 初版\n\n**Provider 切換:**\n```\nUse Ollama? IF ollama_main_model notEmpty\n  true  → Ollama /api/chat\n  false → Cloud AI /chat/completions\n```\n\n**Callback 路徑 (v1.3 新增):**\nWrite QA → Save to Backend DB (`/qc/save-test-questions` 存題庫)\n             → Build Callback → Callback to Backend (`/webhook/n8n` 更新專案狀態)\n\n**Trigger:** `POST /webhook/tigerai-step3`\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_main_model\": \"\",              // 空 → 走 cloud\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_model\": \"gpt-5-mini\",\n  \"backend_url\": \"http://tigerai-backend:3060\",\n  \"question_count\": 10\n}\n```\n- v1.5 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n- v1.7 (2026-05-24): chat 改用通用子工作流 Sub-Chat-Local/Cloud（IF ai_provider 分流，原生 agent）\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)",
         "height": 460,
         "width": 500,
         "color": 4
@@ -386,13 +386,14 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "5nw0j2NE7Pj6eAag",
-          "mode": "id"
+          "value": "__REWIRE_BY_NAME__",
+          "mode": "id",
+          "cachedResultName": "Sub-Chat-Cloud"
         },
         "options": {}
       },
       "id": "exloc",
-      "name": "Execute Sub-Chat-Local",
+      "name": "Execute Sub-Chat-Cloud 2",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
@@ -479,7 +480,7 @@
       "main": [
         [
           {
-            "node": "Execute Sub-Chat-Local",
+            "node": "Execute Sub-Chat-Cloud 2",
             "type": "main",
             "index": 0
           }
@@ -559,7 +560,7 @@
         ]
       ]
     },
-    "Execute Sub-Chat-Local": {
+    "Execute Sub-Chat-Cloud": {
       "main": [
         [
           {
@@ -570,7 +571,7 @@
         ]
       ]
     },
-    "Execute Sub-Chat-Cloud": {
+    "Execute Sub-Chat-Cloud 2": {
       "main": [
         [
           {
@@ -582,9 +583,7 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": []
+  }
 }

@@ -412,7 +412,7 @@
     },
     {
       "parameters": {
-        "content": "# #04 - DataIngestion Generic (v1.8)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — 改為自動偵測 provider（對齊 #02/#03/#05）：`ollama_embedding_model` 空 → 自動走 Cloud AI `/embeddings`，不再依賴 backend 預先設 `embedding_provider` 旗標\n- **v1.2 (2026-04-21)** — 加 `folder_id` 防呆\n- **v1.1 (2026-04-21)** — 新增 Cloud AI embedding 備援（IF 依 `embedding_provider` 旗標分流）\n- **v1.0 (2026-04-20)** — 初版\n\n**Provider 切換 (v1.3):**\n```\nUse Ollama Embed? IF ollama_embedding_model notEmpty\n  true  → Ollama /api/embed\n  false → Cloud AI /embeddings (Bearer cloud_ai_key)\n```\n`embedding_provider` 變成 Set 節點自動計算並記到 callback 訊息用。\n\n**Trigger:** `POST /webhook/tigerai-step4`\n\n**向量維度注意:** Qdrant collection 的 `vectors.size` 必須匹配所選 embedding model：\n- Ollama `qwen3-embedding-8b` → 4096\n- OpenAI `text-embedding-3-small` → 1536\n- OpenAI `text-embedding-3-large` → 3072\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"collection_name\": \"labor_law\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_embedding_model\": \"\",          // 空 → 走 cloud\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_embedding_model\": \"text-embedding-3-large\",\n  \"qdrant_url\": \"http://qdrant-tigerai:6333\",\n  \"qdrant_key\": \"\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n- v1.7 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n",
+        "content": "# #04 - DataIngestion Generic (v1.8)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — 改為自動偵測 provider（對齊 #02/#03/#05）：`ollama_embedding_model` 空 → 自動走 Cloud AI `/embeddings`，不再依賴 backend 預先設 `embedding_provider` 旗標\n- **v1.2 (2026-04-21)** — 加 `folder_id` 防呆\n- **v1.1 (2026-04-21)** — 新增 Cloud AI embedding 備援（IF 依 `embedding_provider` 旗標分流）\n- **v1.0 (2026-04-20)** — 初版\n\n**Provider 切換 (v1.3):**\n```\nUse Ollama Embed? IF ollama_embedding_model notEmpty\n  true  → Ollama /api/embed\n  false → Cloud AI /embeddings (Bearer cloud_ai_key)\n```\n`embedding_provider` 變成 Set 節點自動計算並記到 callback 訊息用。\n\n**Trigger:** `POST /webhook/tigerai-step4`\n\n**向量維度注意:** Qdrant collection 的 `vectors.size` 必須匹配所選 embedding model：\n- Ollama `qwen3-embedding-8b` → 4096\n- OpenAI `text-embedding-3-small` → 1536\n- OpenAI `text-embedding-3-large` → 3072\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"collection_name\": \"labor_law\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_embedding_model\": \"\",          // 空 → 走 cloud\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_embedding_model\": \"text-embedding-3-large\",\n  \"qdrant_url\": \"http://qdrant-tigerai:6333\",\n  \"qdrant_key\": \"\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n- v1.7 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local->Cloud, sentinel for deploy_n8n.py id-rewire)",
         "height": 560,
         "width": 520,
         "color": 4
@@ -575,9 +575,7 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": []
+  }
 }

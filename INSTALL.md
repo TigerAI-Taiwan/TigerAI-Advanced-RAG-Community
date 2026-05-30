@@ -30,6 +30,10 @@ export RAG_FILES_PATH=<shared RAG files host path>
 export TIGERAI_IMAGE_PREFIX=ghcr.io/tigerai-taiwan   # adjust to the published registry
 ```
 
+> **Port 8088 already taken?** The `docker-compose.yml` now honors a `HOST_UI_PORT` env var (defaults to `8088`). If port 8088 is occupied on the host (common: cAdvisor in OpenGenie also defaults to 8088), override it at startup, e.g. `HOST_UI_PORT=8888 docker compose up -d`. Remember to update `PUBLIC_URL` in `.env` to match.
+
+> **FileBrowser password rule (⚠️ gotcha):** recent FileBrowser versions enforce a **minimum 12-char** password and reject weak ones. The classic `admin` / `changeme` defaults will fail silently at login. Set a real ≥12-char `FB_PASSWORD` in `.env` AND match it in the FileBrowser admin UI (or pre-seed via FileBrowser's own setup) before this app's upload feature will work.
+
 ## 3. Start the three app services (on the OpenGenie network)
 
 ```bash
@@ -41,7 +45,24 @@ curl -s http://localhost:8088/backend/health   # expect ok
 
 ## 4. Import the n8n workflows (via API)
 
-Import every JSON in `n8n/V3-WebApp-v1.0/` into the running n8n, then activate, e.g.:
+**Recommended: use the automated importer.**
+
+```bash
+export N8N_URL=http://<n8n-host>:5678
+export N8N_API_KEY=<your key>
+python deploy_n8n.py
+# Imports every workflow under n8n/V3-WebApp-v1.0/, rewires Execute Workflow
+# subflow references by name (their ids change on each install), and activates
+# them. Idempotent: re-runs skip existing workflows unless --force is passed.
+```
+
+- Why the script is needed: when n8n imports a workflow it assigns a **fresh random id** to every subflow. Any `Execute Workflow` node that referenced the old id is now broken. `deploy_n8n.py` re-resolves those references **by workflow name** after import so the call graph still works without manual editing.
+
+These are the cloud query entries (`#05-NonStream-Cloud`, `#05b-Cloud-Streaming`, `#05-RAG-Core`, `Sub-Chat-Cloud`) plus the ingestion pipeline (`#01`–`#04`, `#03b`). The script activates them; note each Production webhook path from the n8n UI.
+
+### Manual fallback (no Python)
+
+If Python isn't available, you can POST each file with curl:
 ```bash
 for f in n8n/V3-WebApp-v1.0/*.json; do
   curl -s -X POST "http://<n8n-host>:5678/api/v1/workflows" \
@@ -49,7 +70,7 @@ for f in n8n/V3-WebApp-v1.0/*.json; do
     --data-binary @"$f"
 done
 ```
-These are the cloud query entries (`#05-NonStream-Cloud`, `#05b-Cloud-Streaming`, `#05-RAG-Core`, `Sub-Chat-Cloud`) plus the ingestion pipeline (`#01`–`#04`, `#03b`). Activate them and note each Production webhook path.
+> **Warning:** this path leaves every `Execute Workflow` reference pointing at the *old* (pre-import) subflow ids, so the workflows will fail at runtime. You must open each caller in the n8n UI and re-pick the correct subflow from the dropdown before activating.
 
 ## 5. Install the Open WebUI pipes
 

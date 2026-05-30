@@ -75,8 +75,9 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "0UQpFS2dW2As1JGL",
-          "mode": "id"
+          "value": "__REWIRE_BY_NAME__",
+          "mode": "id",
+          "cachedResultName": "#05-RAG-Core-v1.0"
         },
         "options": {}
       },
@@ -125,8 +126,9 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "WePsMURN28E7ECrI",
-          "mode": "id"
+          "value": "__REWIRE_BY_NAME__",
+          "mode": "id",
+          "cachedResultName": "Sub-Chat-Cloud-v1.0"
         },
         "options": {}
       },

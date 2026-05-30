@@ -425,7 +425,7 @@
           "__rl": true,
           "value": "__REWIRE_BY_NAME__",
           "mode": "id",
-          "cachedResultName": "Sub-Chat-Cloud"
+          "cachedResultName": "Sub-Chat-Cloud-v1.0"
         },
         "options": {}
       },
@@ -442,8 +442,9 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "WePsMURN28E7ECrI",
-          "mode": "id"
+          "value": "__REWIRE_BY_NAME__",
+          "mode": "id",
+          "cachedResultName": "Sub-Chat-Cloud-v1.0"
         },
         "options": {}
       },
@@ -498,7 +499,7 @@
           "__rl": true,
           "value": "__REWIRE_BY_NAME__",
           "mode": "id",
-          "cachedResultName": "Sub-Chat-Cloud"
+          "cachedResultName": "Sub-Chat-Cloud-v1.0"
         },
         "options": {}
       },
@@ -515,8 +516,9 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "WePsMURN28E7ECrI",
-          "mode": "id"
+          "value": "__REWIRE_BY_NAME__",
+          "mode": "id",
+          "cachedResultName": "Sub-Chat-Cloud-v1.0"
         },
         "options": {}
       },
@@ -571,7 +573,7 @@
           "__rl": true,
           "value": "__REWIRE_BY_NAME__",
           "mode": "id",
-          "cachedResultName": "Sub-Chat-Cloud"
+          "cachedResultName": "Sub-Chat-Cloud-v1.0"
         },
         "options": {}
       },
@@ -588,8 +590,9 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "WePsMURN28E7ECrI",
-          "mode": "id"
+          "value": "__REWIRE_BY_NAME__",
+          "mode": "id",
+          "cachedResultName": "Sub-Chat-Cloud-v1.0"
         },
         "options": {}
       },

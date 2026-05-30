@@ -327,11 +327,11 @@ def ensure_n8n_rag_dir(verbose: bool = True) -> bool:
             if verbose:
                 print(f"[rag-check] OK: created /home/node/.n8n-files/RAG -> . symlink (fallback)")
 
-    # 4. Cross-check: n8n's view of RAG/ vs our splitter's view of /srv/
-    #    If they show different content, n8n and splitter mount DIFFERENT host paths,
-    #    which symlink alone won't fix — print loud warning.
+    # 4. Cross-check: n8n's view of RAG/ vs our splitter's view of /srv/RAG/
+    #    v1.0.13 2026-05-31: splitter 端比對改 /srv/RAG/(對齊 RAG/ project root 約定)。
+    #    若內容不同,代表 n8n 和 splitter 掛到不同 host 路徑,symlink 救不了 — 大聲 warn。
     r_n8n = run(["docker", "exec", n8n_container, "ls", "/home/node/.n8n-files/RAG/"])
-    r_split = run(["docker", "exec", "tigerai-splitter", "ls", "/srv/"])
+    r_split = run(["docker", "exec", "tigerai-splitter", "ls", "/srv/RAG/"])
     if r_n8n.returncode == 0 and r_split.returncode == 0:
         n8n_entries = set((r_n8n.stdout or "").split())
         split_entries = set((r_split.stdout or "").split())
@@ -339,7 +339,7 @@ def ensure_n8n_rag_dir(verbose: bool = True) -> bool:
             only_n8n = n8n_entries - split_entries
             only_split = split_entries - n8n_entries
             if only_n8n or only_split:
-                print("[rag-check] WARNING: n8n's RAG/ and splitter's /srv/ show DIFFERENT content:")
+                print("[rag-check] WARNING: n8n's RAG/ and splitter's /srv/RAG/ show DIFFERENT content:")
                 if only_n8n: print(f"           only in n8n:      {sorted(only_n8n)[:5]}")
                 if only_split: print(f"           only in splitter: {sorted(only_split)[:5]}")
                 print("           This means n8n and splitter mount DIFFERENT host volumes.")

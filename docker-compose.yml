@@ -74,6 +74,28 @@ services:
       - stack
     restart: unless-stopped
 
+  # v1.0.11: TigerAI 自帶 FileBrowser(OpenGenie 預設不含)。
+  # 上傳功能必要,沒它 Tab 02 整個壞掉。--noauth 讓內部 docker network 直接連,
+  # 不用設密碼避開 FB 新版 ≥12 字限制 gotcha;對外仍經 nginx /api/ proxy 走我方 auth。
+  tigerai-filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes:
+      - ${RAG_FILES_PATH:-./data/rag}:/srv
+      - filebrowser_db:/database
+    command:
+      - --noauth
+      - --root=/srv
+      - --address=0.0.0.0
+      - --port=80
+    networks:
+      - stack
+    restart: unless-stopped
+
+volumes:
+  filebrowser_db:
+
 networks:
   stack:
     external: true

@@ -4,9 +4,11 @@
 #   RAG_FILES_PATH        = host path of the shared RAG files dir (same one FileBrowser/n8n use)
 #   TIGERAI_IMAGE_PREFIX  = image registry/namespace (default ghcr.io/tigerai-taiwan)
 services:
-  tigerai-nginx:
+  # nginx 不加 tigerai- 前綴:base 是 upstream nginx:alpine,我們只塞 config 進去。
+  # image 名留 tigerai-rag-nginx 是因為要區分自家 build 的 image。
+  nginx:
     image: ${TIGERAI_IMAGE_PREFIX:-ghcr.io/tigerai-taiwan}/tigerai-rag-nginx:latest
-    container_name: tigerai-nginx
+    container_name: nginx
     ports:
       - "${HOST_UI_PORT:-8088}:80"
     # v2026-05-30: load .env so the upstream HOST/PORT vars (FB_/N8N_/QDRANT_/

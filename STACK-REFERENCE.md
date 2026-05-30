@@ -115,13 +115,18 @@ OpenGenie 依硬體平台出三個 compose stack。**container 命名 / volume �
 
 ---
 
-## 5. TigerAI 自帶的 3 個容器(這部分 TigerAI 控,跟 OpenGenie 解耦)
+## 5. TigerAI 自帶的容器
 
-- `tigerai-nginx`(對外 UI port,預設 8088,可用 `HOST_UI_PORT` 覆寫)
-- `tigerai-backend`(REST API,internal port 3060)
-- `tigerai-splitter`(PDF 預處理,internal port 8000)
+| container_name | 來源 | 用途 |
+|---|---|---|
+| `nginx` | upstream `nginx:alpine` + 我方 config | 對外 UI port(預設 8088,`HOST_UI_PORT` 可覆寫) |
+| `tigerai-backend` | 我方自製 | REST API(internal port 3060) |
+| `tigerai-splitter` | 我方自製 | PDF 預處理(internal port 8000) |
+| `filebrowser` | upstream `filebrowser/filebrowser` | 共享 RAG 檔案 UI(`--noauth` 內部 only) |
 
-這 3 個 image 從 ghcr.io/tigerai-taiwan/ 拉,multi-arch(amd64 + arm64,含 Grace/GB10)。AI 不用操心這 3 個容器內部 — 只要把它們 plug 進對的 docker network,設好 .env 指向正確的 OpenGenie 服務即可。
+**命名規則**:upstream 通用 image(`nginx`、`filebrowser`)用原名,**不冠** `tigerai-`;我方自製(`tigerai-backend`、`tigerai-splitter`)冠 `tigerai-` 以區分。
+
+我方 3 個 image(`tigerai-rag-nginx` / `tigerai-rag-backend` / `tigerai-rag-splitter`)從 ghcr.io/tigerai-taiwan/ 拉,multi-arch(amd64 + arm64,含 Grace/GB10)。AI 不用操心容器內部 — 只要把它們 plug 進對的 docker network,設好 .env 指向正確的 OpenGenie 服務即可。
 
 ---
 

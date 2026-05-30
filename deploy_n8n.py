@@ -470,6 +470,10 @@ def main() -> int:
         help="Skip OpenGenie services auto-detection + backend settings update.",
     )
     parser.add_argument(
+        "--skip-cred-rewire", action="store_true",
+        help="Skip credential rewire pass (rebinding workflow OpenAI/etc creds to your n8n credentials by name match).",
+    )
+    parser.add_argument(
         "--backend-url", default=os.environ.get("BACKEND_URL", ""),
         help="Backend URL for settings update (default: auto-probe localhost:8888 then :8088, or set $BACKEND_URL).",
     )
@@ -630,6 +634,86 @@ def main() -> int:
             print(f"  [REWIRE-FAIL] {wf_name}: HTTP {e.status}\n{e.body[:300]}")
             rewire_failures += 1
     print()
+
+    # 5b. Credential rewire pass (v1.0.7)
+    #     Workflows ship with hardcoded credential IDs from dev env
+    #     (e.g. openAiApi id 'j9NcDQ1CpW9X6v2Z' name 'OpenAiaccount'). Fresh
+    #     install's auto-generated cred IDs don't match → workflows reference
+    #     non-existent creds → activation fails or runtime errors.
+    #     Strategy: GET /api/v1/credentials, group by type, rewire by name match
+    #     OR single-cred-of-type. Soft-fail if API doesn't expose cred list.
+    if not args.skip_cred_rewire:
+        print("Credential rewire pass (match by type + name) ...")
+        try:
+            cred_list_raw = api_get(base_url, "/credentials", api_key)
+            # n8n returns either a list or {data: [...]}
+            cred_list = cred_list_raw.get("data", cred_list_raw) if isinstance(cred_list_raw, dict) else cred_list_raw
+            if not isinstance(cred_list, list):
+                cred_list = []
+            creds_by_type: dict[str, list[dict]] = {}
+            for c in cred_list:
+                creds_by_type.setdefault(c.get("type", "?"), []).append(c)
+            print(f"  user has {len(cred_list)} credential(s) across {len(creds_by_type)} type(s)")
+
+            cred_rewires = 0
+            cred_warnings = 0
+            for wf_id in imported_ids:
+                try:
+                    wf = get_workflow(base_url, api_key, wf_id)
+                except ApiError:
+                    continue
+                wf_name = wf.get("name", "?")
+                changed = False
+                for node in wf.get("nodes", []) or []:
+                    creds = node.get("credentials") or {}
+                    for cred_type, cred_ref in list(creds.items()):
+                        if not isinstance(cred_ref, dict):
+                            continue
+                        old_id = cred_ref.get("id")
+                        old_name = cred_ref.get("name", "")
+                        user_creds = creds_by_type.get(cred_type, [])
+                        user_ids = {c.get("id") for c in user_creds}
+                        if old_id in user_ids:
+                            continue  # already valid
+
+                        # Pick best target: name match → single cred → first
+                        target = None
+                        if old_name:
+                            for c in user_creds:
+                                if c.get("name") == old_name:
+                                    target = c
+                                    break
+                        if target is None and len(user_creds) == 1:
+                            target = user_creds[0]
+                        if target is None and user_creds:
+                            target = user_creds[0]
+                            print(f"  [WARN] {wf_name} node '{node.get('name')}' needs '{cred_type}' but multiple creds exist and name '{old_name}' not found; using first '{target.get('name')}'")
+                            cred_warnings += 1
+
+                        if target:
+                            cred_ref["id"] = target["id"]
+                            cred_ref["name"] = target.get("name", cred_ref.get("name", ""))
+                            changed = True
+                            print(f"  [REWIRE-CRED] {wf_name} node '{node.get('name')}' {cred_type} → '{target.get('name')}' (id {str(target['id'])[:8]}...)")
+                            cred_rewires += 1
+                        else:
+                            print(f"  [FAIL] {wf_name} node '{node.get('name')}' needs '{cred_type}' but you have NONE of that type; create in n8n UI then re-run --force")
+                            cred_warnings += 1
+
+                if changed:
+                    try:
+                        update_workflow(base_url, api_key, wf_id, wf)
+                    except ApiError as e:
+                        print(f"  [CRED-UPDATE-FAIL] {wf_name}: HTTP {e.status}\n{e.body[:200]}")
+
+            print(f"  cred rewires: {cred_rewires}, warnings: {cred_warnings}")
+        except ApiError as e:
+            print(f"  [SKIP] could not list credentials ({e.status}): {e.body[:200]}")
+            print(f"         your n8n API key may lack credentials:read scope.")
+            print(f"         Manual fix: open each affected workflow in n8n UI, re-bind credentials.")
+        except Exception as e:
+            print(f"  [SKIP] unexpected error: {e}")
+        print()
 
     # 6. Activation pass
     activation_failures = 0

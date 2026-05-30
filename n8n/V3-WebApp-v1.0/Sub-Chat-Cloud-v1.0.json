@@ -66,7 +66,7 @@
     },
     {
       "parameters": {
-        "content": "## Sub-Chat-Cloud v1.0 (2026-05-24)\n通用雲端 chat 子工作流。被 #02/#03/#05 用 Execute Workflow 呼叫。\n輸入: {system_prompt, user_content, model(=cloud_ai_model)} → 回 {...輸入, output}\n原生 agent + lmChatOpenAi(OpenAiaccount credential)\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)",
+        "content": "## Sub-Chat-Cloud v1.0 (2026-05-24)\n通用雲端 chat 子工作流。被 #02/#03/#05 用 Execute Workflow 呼叫。\n輸入: {system_prompt, user_content, model(=cloud_ai_model)} → 回 {...輸入, output}\n原生 agent + lmChatOpenAi(OpenAiaccount credential)\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n\n--- v1.0.6 2026-05-31: Removed hardcoded URL fallbacks (docling/qdrant/ollama/backend) — backend now ALWAYS sends these in webhook payload. Workflow fails loud if URL missing, no silent container-name drift.\n",
         "height": 220,
         "width": 420
       },

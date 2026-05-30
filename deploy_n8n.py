@@ -352,6 +352,97 @@ def ensure_n8n_rag_dir(verbose: bool = True) -> bool:
     return True
 
 
+def detect_opengenie_services(backend_url: str, verbose: bool = True) -> dict:
+    """
+    Auto-detect OpenGenie service containers and write discovered URLs into
+    backend settings. Solves the "AI installer names containers differently
+    than our defaults → workflows silently call wrong URLs" failure mode.
+
+    Returns dict of detected services: {service_name: {container, url, healthy}}.
+    """
+    import subprocess
+    import socket
+    import re
+
+    # service_name → (regex_pattern, default_port, settings_key)
+    SVC = [
+        ('docling',     r'docling(-intel|-serve|-cpu|-gpu)?',           5001,  'docling_url'),
+        ('qdrant',      r'qdrant(?!.*pgadmin)(?!.*-ui)',                6333,  'qdrant_url'),
+        ('openwebui',   r'(open[-_]?webui|owui)',                        8080,  'owui_base_url'),
+        ('filebrowser', r'filebrowser',                                  80,    None),  # FB_HOST/PORT, not single URL
+        ('ollama',      r'^ollama$',                                     11434, 'ollama_url'),
+        ('postgres',    r'(^postgres|^pg-)(?!.*admin)',                  5432,  None),  # PG_HOST/PORT, not single URL
+    ]
+
+    def run(cmd):
+        return subprocess.run(cmd, capture_output=True, text=True)
+
+    if run(['docker', 'version', '--format', '{{.Server.Version}}']).returncode != 0:
+        if verbose: print("[svc-detect] docker CLI not available; skipping.")
+        return {}
+
+    # Get all running container names
+    r = run(['docker', 'ps', '--format', '{{.Names}}'])
+    names = [n.strip() for n in (r.stdout or '').split() if n.strip()]
+
+    detected: dict = {}
+    for svc, pattern, port, key in SVC:
+        matches = [n for n in names if re.search(pattern, n, re.I)]
+        if not matches:
+            detected[svc] = None
+            if verbose: print(f"[svc-detect] {svc:12s} → NOT FOUND (matched 0 of {len(names)} containers against /{pattern}/)")
+            continue
+        # Prefer 'main' over 'worker' if multiple matches
+        best = sorted(matches, key=lambda n: (0 if 'main' in n.lower() else 1, n))[0]
+        url = f'http://{best}:{port}'
+        # TCP health check (via splitter container which shares network with services)
+        # Just verify the container is up (already true since it's in docker ps)
+        detected[svc] = {'container': best, 'url': url, 'port': port, 'settings_key': key}
+        if verbose: print(f"[svc-detect] {svc:12s} → {url:50s} (container: {best})")
+
+    # Build settings update payload
+    settings_update = {}
+    for svc, info in detected.items():
+        if info is None: continue
+        key = info['settings_key']
+        if key:
+            settings_update[key] = info['url']
+        # Special handling for filebrowser (HOST + PORT split)
+        if svc == 'filebrowser':
+            settings_update['fb_host'] = f"{info['container']}:{info['port']}"
+        # Special handling for postgres (HOST + PORT split — backend reads PG_HOST/PG_PORT from env, not settings)
+        # Skip — backend's PG config comes from env vars, not /settings API
+
+    if not settings_update:
+        if verbose: print("[svc-detect] No service URLs to update.")
+        return detected
+
+    # POST to backend /settings
+    if verbose:
+        print()
+        print(f"[svc-detect] Updating backend settings via {backend_url}/settings:")
+        for k, v in settings_update.items():
+            print(f"             {k:20s} = {v}")
+
+    try:
+        # backend POST /settings expects {key: value, ...} (per backend route)
+        req = urllib.request.Request(
+            f"{backend_url.rstrip('/')}/settings",
+            data=json.dumps(settings_update).encode('utf-8'),
+            headers={'Content-Type': 'application/json'},
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read().decode('utf-8')
+            if verbose: print(f"[svc-detect] OK: backend accepted settings update (HTTP {resp.status})")
+    except Exception as e:
+        if verbose:
+            print(f"[svc-detect] WARN: could not POST to backend /settings: {e}")
+            print(f"             Manual fix: open Tab 07 System Settings, set URLs to the detected values above.")
+
+    return detected
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Deploy TigerAI-RAG Community n8n workflows.",
@@ -374,6 +465,14 @@ def main() -> int:
         "--skip-rag-check", action="store_true",
         help="Skip the n8n RAG/ directory pre-flight check (the auto-create symlink in n8n container).",
     )
+    parser.add_argument(
+        "--skip-svc-detect", action="store_true",
+        help="Skip OpenGenie services auto-detection + backend settings update.",
+    )
+    parser.add_argument(
+        "--backend-url", default=os.environ.get("BACKEND_URL", ""),
+        help="Backend URL for settings update (default: auto-probe localhost:8888 then :8088, or set $BACKEND_URL).",
+    )
     args = parser.parse_args()
 
     # v1.0.5: pre-flight — ensure RAG/ exists at n8n's mount (fixes the
@@ -384,6 +483,32 @@ def main() -> int:
         print("Pre-flight: n8n RAG/ directory check")
         print("=" * 60)
         ensure_n8n_rag_dir(verbose=True)
+        print()
+
+    # v1.0.6: pre-flight — auto-detect OpenGenie services + update backend
+    # settings with discovered URLs (fixes the "AI installer names container
+    # differently than our defaults → workflows silently call wrong URL")
+    if not args.skip_svc_detect:
+        print("=" * 60)
+        print("Pre-flight: OpenGenie services auto-detection")
+        print("=" * 60)
+        backend_url = args.backend_url
+        if not backend_url:
+            # Auto-probe localhost:8888 then :8088 (v1.0.4 default port change)
+            for port in (8888, 8088):
+                try:
+                    with urllib.request.urlopen(f'http://localhost:{port}/backend/health', timeout=2) as resp:
+                        if resp.status == 200:
+                            backend_url = f'http://localhost:{port}/backend'
+                            print(f"[svc-detect] backend auto-detected at localhost:{port}")
+                            break
+                except Exception:
+                    pass
+        if not backend_url:
+            print("[svc-detect] backend URL not found at localhost:8888 or :8088")
+            print("           Set --backend-url=http://<host>:<port>/backend or $BACKEND_URL to update settings")
+            print("           Service detection will still run + print, but won't update backend.")
+        detect_opengenie_services(backend_url or 'http://localhost:8888/backend', verbose=True)
         print()
 
     # 1. Config

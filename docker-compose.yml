@@ -57,14 +57,14 @@ services:
       - ${RAG_FILES_PATH:-./data/rag}:/srv
     # v2026-05-31: auto-create RAG/ self-loop symlink so n8n workflow #01's
     # path `/home/node/.n8n-files/RAG/{folder_id}/...` resolves to the same
-    # files FileBrowser writes at `{folder_id}/...`. Required because n8n
-    # container assumes a `RAG/` subdir on its mount but FileBrowser writes
-    # directly at the mount root. Install AI no longer needs to know this.
-    # Skips if /srv/RAG already exists (allows manual real subdir setups).
+    # files FileBrowser writes at `{folder_id}/...`. v1.0.9 priority flip:
+    # prefer REAL directory (cleaner, no symlink education cost), fallback to
+    # self-loop symlink only if mkdir fails (read-only volume / perms).
+    # Skips entirely if /srv/RAG already exists.
     command:
       - sh
       - -c
-      - '[ ! -e /srv/RAG ] && ln -s . /srv/RAG && echo "[startup] created /srv/RAG -> . symlink (n8n path compat)"; exec uvicorn main:app --host 0.0.0.0 --port 8000'
+      - 'if [ ! -e /srv/RAG ]; then mkdir /srv/RAG 2>/dev/null && echo "[startup] created /srv/RAG/ (real dir)" || (ln -s . /srv/RAG && echo "[startup] created /srv/RAG -> . symlink (fallback)"); fi; exec uvicorn main:app --host 0.0.0.0 --port 8000'
     networks:
       - stack
     restart: unless-stopped

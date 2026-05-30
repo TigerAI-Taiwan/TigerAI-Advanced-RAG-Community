@@ -303,27 +303,29 @@ def ensure_n8n_rag_dir(verbose: bool = True) -> bool:
             print(f"[rag-check] OK: /home/node/.n8n-files/RAG already exists in {n8n_container}")
     else:
         if verbose:
-            print(f"[rag-check] RAG/ missing in {n8n_container}; creating symlink...")
-        # 3. Create symlink (idempotent guard)
-        r = run(["docker", "exec", n8n_container, "sh", "-c",
-                 "[ ! -e /home/node/.n8n-files/RAG ] && ln -s . /home/node/.n8n-files/RAG && echo CREATED"])
-        if r.returncode != 0 or "CREATED" not in (r.stdout or ""):
-            # Try mkdir fallback
-            r2 = run(["docker", "exec", n8n_container,
-                      "mkdir", "-p", "/home/node/.n8n-files/RAG"])
-            if r2.returncode != 0:
+            print(f"[rag-check] RAG/ missing in {n8n_container}; creating real directory (preferred) ...")
+        # v1.0.9: 優先建真目錄(乾淨、無 symlink 教育成本)
+        r = run(["docker", "exec", n8n_container,
+                 "mkdir", "-p", "/home/node/.n8n-files/RAG"])
+        if r.returncode == 0:
+            if verbose:
+                print(f"[rag-check] OK: created /home/node/.n8n-files/RAG/ (real directory)")
+        else:
+            # mkdir 失敗(e.g. read-only mount)→ fallback symlink
+            if verbose:
+                print(f"[rag-check] mkdir failed ({r.stderr.strip()}); trying symlink fallback ...")
+            r2 = run(["docker", "exec", n8n_container, "sh", "-c",
+                      "[ ! -e /home/node/.n8n-files/RAG ] && ln -s . /home/node/.n8n-files/RAG && echo CREATED"])
+            if r2.returncode != 0 or "CREATED" not in (r2.stdout or ""):
                 if verbose:
                     print(f"[rag-check] FAIL: could not create RAG/ in {n8n_container}")
-                    print(f"           stderr (symlink): {r.stderr.strip()}")
-                    print(f"           stderr (mkdir):  {r2.stderr.strip()}")
+                    print(f"           stderr (mkdir):  {r.stderr.strip()}")
+                    print(f"           stderr (symlink): {r2.stderr.strip()}")
                     print(f"           Likely cause: n8n mount is read-only, or different user/permissions.")
-                    print(f"           Try as root: docker exec -u root {n8n_container} sh -c 'ln -s . /home/node/.n8n-files/RAG'")
+                    print(f"           Try as root: docker exec -u root {n8n_container} mkdir -p /home/node/.n8n-files/RAG")
                 return False
             if verbose:
-                print(f"[rag-check] OK: created /home/node/.n8n-files/RAG/ (mkdir fallback)")
-        else:
-            if verbose:
-                print(f"[rag-check] OK: created /home/node/.n8n-files/RAG -> . symlink")
+                print(f"[rag-check] OK: created /home/node/.n8n-files/RAG -> . symlink (fallback)")
 
     # 4. Cross-check: n8n's view of RAG/ vs our splitter's view of /srv/
     #    If they show different content, n8n and splitter mount DIFFERENT host paths,

@@ -234,6 +234,124 @@ def fmt_row(name: str, wf_id: str, status: str, width_name: int) -> str:
     return f"  {name.ljust(width_name)}  {wf_id:<24}  {status}"
 
 
+def ensure_n8n_rag_dir(verbose: bool = True) -> bool:
+    """
+    Ensure RAG/ directory exists at n8n container's mount path.
+
+    The bundled workflows read `/home/node/.n8n-files/RAG/<project_id>/...`.
+    If n8n's mount doesn't have a `RAG/` entry, every training silently
+    "succeeds with 0 files". This function:
+      1. Auto-detects the running n8n container (tries common names)
+      2. docker-execs `ls` to check if RAG/ exists in its mount
+      3. If missing, creates `ln -s . /home/node/.n8n-files/RAG`
+      4. Verifies + reports cross-check with our splitter's /srv view
+
+    Returns True if RAG/ is usable; False if any step failed.
+    Soft-fails: prints clear remedy on failure but doesn't abort the deploy.
+    """
+    import subprocess
+
+    def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
+        return subprocess.run(cmd, capture_output=True, text=True, **kw)
+
+    # 0. docker CLI available?
+    r = run(["docker", "version", "--format", "{{.Server.Version}}"])
+    if r.returncode != 0:
+        if verbose:
+            print("[rag-check] docker CLI not available; skipping n8n RAG/ check.")
+            print("           If n8n's mount doesn't have RAG/ subdir, manually run:")
+            print("             docker exec <n8n> sh -c 'ln -s . /home/node/.n8n-files/RAG'")
+        return False
+
+    # 1. Find running n8n container
+    candidates = [
+        "n8n", "n8n-main", "n8n-worker",
+        "opengenie-n8n", "ai-customer-service-n8n",
+    ]
+    n8n_container = None
+    for name in candidates:
+        r = run(["docker", "inspect", "-f", "{{.State.Running}}", name])
+        if r.returncode == 0 and r.stdout.strip() == "true":
+            n8n_container = name
+            break
+    if not n8n_container:
+        # Fall back: scan all running containers for /home/node/.n8n-files mount
+        r = run(["docker", "ps", "--format", "{{.Names}}"])
+        for nm in (r.stdout or "").splitlines():
+            nm = nm.strip()
+            if not nm: continue
+            r2 = run(["docker", "inspect", "-f",
+                      "{{range .Mounts}}{{.Destination}} {{end}}", nm])
+            if "/home/node/.n8n-files" in (r2.stdout or ""):
+                n8n_container = nm
+                break
+
+    if not n8n_container:
+        if verbose:
+            print("[rag-check] Could not find n8n container.")
+            print("           Tried common names + scanned all running containers for /home/node/.n8n-files mount.")
+            print("           If you know your n8n container name, run:")
+            print("             docker exec <YOUR_N8N> sh -c '[ ! -e /home/node/.n8n-files/RAG ] && ln -s . /home/node/.n8n-files/RAG'")
+        return False
+    if verbose:
+        print(f"[rag-check] Found n8n container: {n8n_container}")
+
+    # 2. Check if RAG/ exists at n8n's mount
+    r = run(["docker", "exec", n8n_container, "test", "-e", "/home/node/.n8n-files/RAG"])
+    if r.returncode == 0:
+        if verbose:
+            print(f"[rag-check] OK: /home/node/.n8n-files/RAG already exists in {n8n_container}")
+    else:
+        if verbose:
+            print(f"[rag-check] RAG/ missing in {n8n_container}; creating symlink...")
+        # 3. Create symlink (idempotent guard)
+        r = run(["docker", "exec", n8n_container, "sh", "-c",
+                 "[ ! -e /home/node/.n8n-files/RAG ] && ln -s . /home/node/.n8n-files/RAG && echo CREATED"])
+        if r.returncode != 0 or "CREATED" not in (r.stdout or ""):
+            # Try mkdir fallback
+            r2 = run(["docker", "exec", n8n_container,
+                      "mkdir", "-p", "/home/node/.n8n-files/RAG"])
+            if r2.returncode != 0:
+                if verbose:
+                    print(f"[rag-check] FAIL: could not create RAG/ in {n8n_container}")
+                    print(f"           stderr (symlink): {r.stderr.strip()}")
+                    print(f"           stderr (mkdir):  {r2.stderr.strip()}")
+                    print(f"           Likely cause: n8n mount is read-only, or different user/permissions.")
+                    print(f"           Try as root: docker exec -u root {n8n_container} sh -c 'ln -s . /home/node/.n8n-files/RAG'")
+                return False
+            if verbose:
+                print(f"[rag-check] OK: created /home/node/.n8n-files/RAG/ (mkdir fallback)")
+        else:
+            if verbose:
+                print(f"[rag-check] OK: created /home/node/.n8n-files/RAG -> . symlink")
+
+    # 4. Cross-check: n8n's view of RAG/ vs our splitter's view of /srv/
+    #    If they show different content, n8n and splitter mount DIFFERENT host paths,
+    #    which symlink alone won't fix — print loud warning.
+    r_n8n = run(["docker", "exec", n8n_container, "ls", "/home/node/.n8n-files/RAG/"])
+    r_split = run(["docker", "exec", "tigerai-splitter", "ls", "/srv/"])
+    if r_n8n.returncode == 0 and r_split.returncode == 0:
+        n8n_entries = set((r_n8n.stdout or "").split())
+        split_entries = set((r_split.stdout or "").split())
+        if n8n_entries != split_entries and verbose:
+            only_n8n = n8n_entries - split_entries
+            only_split = split_entries - n8n_entries
+            if only_n8n or only_split:
+                print("[rag-check] WARNING: n8n's RAG/ and splitter's /srv/ show DIFFERENT content:")
+                if only_n8n: print(f"           only in n8n:      {sorted(only_n8n)[:5]}")
+                if only_split: print(f"           only in splitter: {sorted(only_split)[:5]}")
+                print("           This means n8n and splitter mount DIFFERENT host volumes.")
+                print("           Symlink alone CANNOT fix this. You must align the mounts:")
+                print(f"           - n8n container ({n8n_container}) must mount the same host path")
+                print(f"             as your tigerai-splitter / FileBrowser (or n8n's parent + RAG/ subdir).")
+                print("           Check both compose files for the volume mounts.")
+                return False
+        elif verbose:
+            print(f"[rag-check] OK: n8n + splitter see same content ({len(n8n_entries)} entries)")
+
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Deploy TigerAI-RAG Community n8n workflows.",
@@ -252,7 +370,21 @@ def main() -> int:
         "--no-activate", action="store_true",
         help="Skip the activation step.",
     )
+    parser.add_argument(
+        "--skip-rag-check", action="store_true",
+        help="Skip the n8n RAG/ directory pre-flight check (the auto-create symlink in n8n container).",
+    )
     args = parser.parse_args()
+
+    # v1.0.5: pre-flight — ensure RAG/ exists at n8n's mount (fixes the
+    # "PDF→MD silently succeeds 0 files" failure mode for installs where
+    # n8n's mount doesn't have a RAG/ subdir).
+    if not args.skip_rag_check:
+        print("=" * 60)
+        print("Pre-flight: n8n RAG/ directory check")
+        print("=" * 60)
+        ensure_n8n_rag_dir(verbose=True)
+        print()
 
     # 1. Config
     base_url = os.environ.get("N8N_URL", "").strip()

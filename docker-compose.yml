@@ -86,11 +86,13 @@ services:
     volumes:
       - ${RAG_FILES_PATH:-./data/rag}:/srv
       - filebrowser_db:/database
+    # v1.0.12: --root=/srv/RAG(不是 /srv),讓 Tab 02 訓練專案列表只看到 RAG/ 下的
+    # 真實專案 folder。否則 root=/srv 會把 n8n 其他檔案 / RAG 自己都當成「專案」列。
+    # 開機先 mkdir -p /srv/RAG 確保 FB --root 指得到(splitter 也會建,但兩個容器
+    # 並行啟動時不保證順序)。
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - --noauth
-      - --root=/srv
-      - --address=0.0.0.0
-      - --port=80
+      - 'mkdir -p /srv/RAG && exec /filebrowser --noauth --root=/srv/RAG --address=0.0.0.0 --port=80'
     networks:
       - stack
     restart: unless-stopped

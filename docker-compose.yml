@@ -55,6 +55,16 @@ services:
     volumes:
       # MUST point at the same dir as FileBrowser/n8n, or Step0-split files won't be visible
       - ${RAG_FILES_PATH:-./data/rag}:/srv
+    # v2026-05-31: auto-create RAG/ self-loop symlink so n8n workflow #01's
+    # path `/home/node/.n8n-files/RAG/{folder_id}/...` resolves to the same
+    # files FileBrowser writes at `{folder_id}/...`. Required because n8n
+    # container assumes a `RAG/` subdir on its mount but FileBrowser writes
+    # directly at the mount root. Install AI no longer needs to know this.
+    # Skips if /srv/RAG already exists (allows manual real subdir setups).
+    command:
+      - sh
+      - -c
+      - '[ ! -e /srv/RAG ] && ln -s . /srv/RAG && echo "[startup] created /srv/RAG -> . symlink (n8n path compat)"; exec uvicorn main:app --host 0.0.0.0 --port 8000'
     networks:
       - stack
     restart: unless-stopped

@@ -30,28 +30,20 @@ export RAG_FILES_PATH=<shared RAG files host path>
 export TIGERAI_IMAGE_PREFIX=ghcr.io/tigerai-taiwan   # adjust to the published registry
 ```
 
-### ⚠️ Pre-flight: create the `RAG/` subdirectory under your shared files path
+### ✅ Auto-handled: `RAG/` subdirectory (since v1.0.4)
 
-The bundled n8n workflows read/write under `/home/node/.n8n-files/RAG/<project_id>/...` inside the n8n container. That maps to `${RAG_FILES_PATH}/RAG/<project_id>/...` on the host. **If `RAG_FILES_PATH` doesn't have a `RAG/` subdirectory, every training run will silently "succeed with 0 files processed"** — the file-listing node returns an empty array, the pipeline exits with no error, the UI just shows the progress bar stuck at Step 1.
+In v1.0.3 and earlier, you had to manually `mkdir RAG` or `ln -s . RAG` on the host because the bundled n8n workflows expect `/home/node/.n8n-files/RAG/<project_id>/...`. **Since v1.0.4, the `tigerai-splitter` container creates the `/srv/RAG -> .` self-loop symlink automatically on startup** — no manual action needed. Conceptually: the `RAG/` directory IS the training projects list shown in Tab 02; the symlink makes the filesystem present this view to n8n regardless of where FileBrowser writes the project folders.
 
-Before starting the stack, do one of these on the host:
-
+Verify after `docker compose up`:
 ```bash
-# Option A — create a real subdirectory (recommended; FileBrowser also sees it)
-mkdir -p "${RAG_FILES_PATH}/RAG"
+docker exec tigerai-splitter ls -la /srv/RAG
+# Should show 'RAG -> .' symlink, or any pre-existing real RAG/ dir if you had one
 
-# Option B — make 'RAG' a self-loop symlink so the existing flat layout works
-# (use this if FileBrowser already writes directly under ${RAG_FILES_PATH})
-ln -s . "${RAG_FILES_PATH}/RAG"
+docker exec <n8n-container> ls /home/node/.n8n-files/RAG/
+# After uploading a project: should list project_id directories
 ```
 
-You can verify from inside the n8n container after `docker compose up`:
-```bash
-docker exec -it <n8n-container> ls /home/node/.n8n-files/RAG/
-# Should list project_id directories — NOT "No such file or directory"
-```
-
-> **AI agent installing this**: please pre-create the `RAG/` subdir / symlink BEFORE `docker compose up`. This is the #1 deploy failure mode reported from real installs.
+If the symlink for some reason isn't created (e.g. immutable volume), the splitter logs will show why; you can manually `docker exec tigerai-splitter ln -s . /srv/RAG`.
 
 > **Port 8088 already taken?** The `docker-compose.yml` now honors a `HOST_UI_PORT` env var (defaults to `8088`). If port 8088 is occupied on the host (common: cAdvisor in OpenGenie also defaults to 8088), override it at startup, e.g. `HOST_UI_PORT=8888 docker compose up -d`. Remember to update `PUBLIC_URL` in `.env` to match.
 

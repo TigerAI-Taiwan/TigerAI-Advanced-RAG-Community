@@ -26,11 +26,7 @@ Your job: deploy OpenGenie first, then deploy this app and connect it to OpenGen
 
 These are the failure modes that real installs hit silently (pipeline succeeds with 0 files, login fails, port conflicts). Address them up front:
 
-1. **Create the `RAG/` subdirectory** under the shared files path. The bundled n8n workflows assume `/home/node/.n8n-files/RAG/<project_id>/...` exists. If `RAG_FILES_PATH/RAG/` is missing on the host, every training run silently "succeeds with 0 files processed". Run on the host:
-   ```bash
-   mkdir -p "${RAG_FILES_PATH}/RAG"      # OR: ln -s . "${RAG_FILES_PATH}/RAG" if files live directly under RAG_FILES_PATH
-   ```
-   Verify after `docker compose up`: `docker exec <n8n-container> ls /home/node/.n8n-files/RAG/`.
+1. ~~Create the `RAG/` subdirectory under the shared files path~~ — **AUTO-HANDLED since v1.0.4**. The `tigerai-splitter` container creates `/srv/RAG -> .` symlink on startup. You no longer need to do anything. (Conceptually: the `RAG/` directory = the training projects container shown in Tab 02 UI; symlink presents this view to n8n.) Verify: `docker exec tigerai-splitter ls -la /srv/RAG`
 
 2. **Check `HOST_UI_PORT`**: default 8088 conflicts with cAdvisor in many OpenGenie stacks. Probe first (`ss -lnt | grep 8088` or `docker ps --format '{{.Ports}}' | grep 8088`). If taken, set `HOST_UI_PORT=8888` (or another free port) in `.env` AND update `PUBLIC_URL` to match.
 

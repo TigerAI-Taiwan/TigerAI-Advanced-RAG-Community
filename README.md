@@ -69,7 +69,13 @@ Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover th
 
 ## License
 
-[Apache-2.0](LICENSE).
+[Apache-2.0](LICENSE) — code is yours to use, fork, modify and redistribute freely.
+
+### Trademark
+
+**TigerAI**, the TigerAI logo, and product names such as *TigerAI Advanced RAG* and *TigerAI Community Edition* are trademarks of **TigerAI Taiwan**. The Apache-2.0 license covers the **source code only** — it does not grant rights to the name or logo.
+
+You can fork and build on this codebase freely; please rebrand if you redistribute a modified version commercially or host it as a paid service. See **[TRADEMARK.md](TRADEMARK.md)** for the full policy (it's short and friendly — same model as Kubernetes / Docker / Grafana / PostgreSQL).
 
 ---
 
@@ -90,3 +96,5 @@ Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover th
 **安裝(免動手)**:打開 AI coding agent(**Claude Code / Antigravity / Codex**),把**兩個 URL** 丟給它 —— ① [OpenGenie AI Stack](https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack)(基礎設施)② 本 repo(應用)。Agent 會自己讀完、**安裝並串接好**,人不用介入;只會跟你要一把 **Cloud AI API key**。詳見 **[AGENTS.md](AGENTS.md)** / **[INSTALL.md](INSTALL.md)**。映像檔為 multi-arch(**amd64 + arm64**,含 NVIDIA Grace/GB10),位於 `ghcr.io/tigerai-taiwan/tigerai-rag-*`。
 
 **版本差異**:Community(本 repo,免費、Apache-2.0、**雲端 AI**)= 陽春雲端版;**地端/on-prem、Rerank 重排、多模態型錄 RAG、可信 QC、排程佇列、跨文件知識圖譜(跨報告多跳交叉查詢)** 屬付費版 —— 需要請洽詢。
+
+**商標(Trademark)**:**TigerAI**、TigerAI logo 與「TigerAI Advanced RAG」等產品名稱為 **TigerAI Taiwan** 的商標。Apache-2.0 只授權**程式碼**,不授權品牌與 logo。可以自由 fork / 修改 / 使用程式碼;但若你**修改後對外散佈或商業化(如 SaaS 服務)**,請改用自己的名稱與 logo(如「MyCompany RAG (fork of TigerAI)」這樣標示來源 OK)。完整政策見 **[TRADEMARK.md](TRADEMARK.md)**(與 Kubernetes / Docker / Grafana / PostgreSQL 同模式)。

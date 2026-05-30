@@ -22,6 +22,24 @@ Your job: deploy OpenGenie first, then deploy this app and connect it to OpenGen
 - The only human input you should request is the **Cloud AI endpoint + API key** (and the public base URL if deploying remotely). Everything else you discover from the running OpenGenie stack.
 - Verify with the in-app health check before declaring done (expect all services green).
 
+## ⚠️ Known deploy gotchas — do these BEFORE `docker compose up`
+
+These are the failure modes that real installs hit silently (pipeline succeeds with 0 files, login fails, port conflicts). Address them up front:
+
+1. **Create the `RAG/` subdirectory** under the shared files path. The bundled n8n workflows assume `/home/node/.n8n-files/RAG/<project_id>/...` exists. If `RAG_FILES_PATH/RAG/` is missing on the host, every training run silently "succeeds with 0 files processed". Run on the host:
+   ```bash
+   mkdir -p "${RAG_FILES_PATH}/RAG"      # OR: ln -s . "${RAG_FILES_PATH}/RAG" if files live directly under RAG_FILES_PATH
+   ```
+   Verify after `docker compose up`: `docker exec <n8n-container> ls /home/node/.n8n-files/RAG/`.
+
+2. **Check `HOST_UI_PORT`**: default 8088 conflicts with cAdvisor in many OpenGenie stacks. Probe first (`ss -lnt | grep 8088` or `docker ps --format '{{.Ports}}' | grep 8088`). If taken, set `HOST_UI_PORT=8888` (or another free port) in `.env` AND update `PUBLIC_URL` to match.
+
+3. **Set a strong FileBrowser password** (≥12 chars, not weak/common). Recent FileBrowser silently rejects weak passwords; default `admin`/`changeme` will fail login.
+
+4. **`allowed_formats` default is `pdf`** (since v1.0.3). If user wants to ingest other types (docx, md, txt), set it in Tab 07 → System Settings after deploy. The legacy default `xlsx` would have caused PDF uploads to be silently filtered out.
+
+5. **Verify n8n credentials exist**: the imported workflows reference `OpenAI` and other credentials by id. After `python deploy_n8n.py`, ask the user to open n8n → Settings → Credentials, create or rebind `OpenAI` (or whichever LLM provider you wired) before training will work.
+
 ## What this app needs from OpenGenie
 
 | OpenGenie service | This app uses it for |

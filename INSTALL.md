@@ -30,9 +30,34 @@ export RAG_FILES_PATH=<shared RAG files host path>
 export TIGERAI_IMAGE_PREFIX=ghcr.io/tigerai-taiwan   # adjust to the published registry
 ```
 
+### ⚠️ Pre-flight: create the `RAG/` subdirectory under your shared files path
+
+The bundled n8n workflows read/write under `/home/node/.n8n-files/RAG/<project_id>/...` inside the n8n container. That maps to `${RAG_FILES_PATH}/RAG/<project_id>/...` on the host. **If `RAG_FILES_PATH` doesn't have a `RAG/` subdirectory, every training run will silently "succeed with 0 files processed"** — the file-listing node returns an empty array, the pipeline exits with no error, the UI just shows the progress bar stuck at Step 1.
+
+Before starting the stack, do one of these on the host:
+
+```bash
+# Option A — create a real subdirectory (recommended; FileBrowser also sees it)
+mkdir -p "${RAG_FILES_PATH}/RAG"
+
+# Option B — make 'RAG' a self-loop symlink so the existing flat layout works
+# (use this if FileBrowser already writes directly under ${RAG_FILES_PATH})
+ln -s . "${RAG_FILES_PATH}/RAG"
+```
+
+You can verify from inside the n8n container after `docker compose up`:
+```bash
+docker exec -it <n8n-container> ls /home/node/.n8n-files/RAG/
+# Should list project_id directories — NOT "No such file or directory"
+```
+
+> **AI agent installing this**: please pre-create the `RAG/` subdir / symlink BEFORE `docker compose up`. This is the #1 deploy failure mode reported from real installs.
+
 > **Port 8088 already taken?** The `docker-compose.yml` now honors a `HOST_UI_PORT` env var (defaults to `8088`). If port 8088 is occupied on the host (common: cAdvisor in OpenGenie also defaults to 8088), override it at startup, e.g. `HOST_UI_PORT=8888 docker compose up -d`. Remember to update `PUBLIC_URL` in `.env` to match.
 
 > **FileBrowser password rule (⚠️ gotcha):** recent FileBrowser versions enforce a **minimum 12-char** password and reject weak ones. The classic `admin` / `changeme` defaults will fail silently at login. Set a real ≥12-char `FB_PASSWORD` in `.env` AND match it in the FileBrowser admin UI (or pre-seed via FileBrowser's own setup) before this app's upload feature will work.
+
+> **Allowed file formats default** (since v1.0.3): backend default `allowed_formats=pdf`. If you need to ingest `.docx`, `.md`, `.txt` etc., go to **Tab 07 System Settings → Allowed formats** and set a comma list like `pdf,docx,md,txt`. (Previous default `xlsx` was an oversight and caused PDF uploads to be silently filtered out by the #01 workflow.)
 
 ## 3. Start the three app services (on the OpenGenie network)
 

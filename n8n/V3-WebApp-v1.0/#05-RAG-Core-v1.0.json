@@ -417,12 +417,34 @@
     },
     {
       "parameters": {
-        "jsCode": "// Qdrant 命中 → context 字串 + sources（filter 或 fallback 都進這）\nconst hits = $input.first().json.result || [];\nconst ctx = hits.map((h,i)=>{const p=h.payload||{};const src=p.original_file||p.source_file||'';const sc=typeof h.score==='number'?h.score.toFixed(3):'-';return `[${i+1}] (score=${sc}${src?', '+src:''})\\n${p.text||''}`;}).join('\\n\\n');\nreturn [{ json: { context: ctx, hits: hits.length, sources: hits.map(h=>h.payload?.original_file||h.payload?.source_file).filter(Boolean) } }];"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "g1",
+              "name": "context",
+              "value": "={{ (($input.first().json.result) || []).map((h, i) => '[' + (i+1) + '] (score=' + (typeof h.score === 'number' ? h.score.toFixed(3) : '-') + (h.payload && (h.payload.original_file || h.payload.source_file) ? ', ' + (h.payload.original_file || h.payload.source_file) : '') + ')\n' + ((h.payload && h.payload.text) || '')).join('\n\n') }}",
+              "type": "string"
+            },
+            {
+              "id": "g2",
+              "name": "hits",
+              "value": "={{ (($input.first().json.result) || []).length }}",
+              "type": "number"
+            },
+            {
+              "id": "g3",
+              "name": "sources",
+              "value": "={{ (($input.first().json.result) || []).map(h => (h.payload && (h.payload.original_file || h.payload.source_file))).filter(Boolean) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "n-context",
       "name": "Build RAG Context",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         1792,
         64
@@ -627,7 +649,7 @@
     },
     {
       "parameters": {
-        "content": "# #05-RAG-Core v1.0 (2026-05-25)\n\n共用 RAG 檢索核心子工作流。被 4 支查詢入口(非串流×雲地 / 串流×雲地)用 Execute Workflow 呼叫。\n\n## 契約\n- 輸入(呼叫端傳):{ chatInput, app_name, collection_name, sessionId, min_keywords }\n- 內部:Fetch Config(app_name→collection 單一來源)→ Fetch KW → Build Context → Agent1 Intent(雲端,同 #05 現況)→ Route → RAG(embed→qdrant→fallback→context→LLM input)或 Direct\n- 輸出:\n  - route='rag': { user_content, system_prompt, model, context, hits, sources, keywords_used, sessionId, ai_provider, cloud_ai_url/key, ollama_url/key }\n  - route='direct': { answer, sessionId, ai_provider }\n\n## 版本歷史\n- v1.0 (2026-05-25): 從 #05-Query-v1.10 抽出檢索段(Build LLM Input 之前)。intent 暫維持雲端 langchain Agent1+Memory(零行為變更);純地端 intent 切換留作後續。\n\n## 設計理由\n檢索回傳離散結果(非串流),放子工作流不違反「串流不可用子工作流」規則 → 4 支入口共用一份檢索,只差最後 LLM 呼叫。",
+        "content": "# #05-RAG-Core v1.0 (2026-05-25)\n\n共用 RAG 檢索核心子工作流。被 4 支查詢入口(非串流×雲地 / 串流×雲地)用 Execute Workflow 呼叫。\n\n## 契約\n- 輸入(呼叫端傳):{ chatInput, app_name, collection_name, sessionId, min_keywords }\n- 內部:Fetch Config(app_name→collection 單一來源)→ Fetch KW → Build Context → Agent1 Intent(雲端,同 #05 現況)→ Route → RAG(embed→qdrant→fallback→context→LLM input)或 Direct\n- 輸出:\n  - route='rag': { user_content, system_prompt, model, context, hits, sources, keywords_used, sessionId, ai_provider, cloud_ai_url/key, ollama_url/key }\n  - route='direct': { answer, sessionId, ai_provider }\n\n## 版本歷史\n- v1.0 (2026-05-25): 從 #05-Query-v1.10 抽出檢索段(Build LLM Input 之前)。intent 暫維持雲端 langchain Agent1+Memory(零行為變更);純地端 intent 切換留作後續。\n\n## 設計理由\n檢索回傳離散結果(非串流),放子工作流不違反「串流不可用子工作流」規則 → 4 支入口共用一份檢索,只差最後 LLM 呼叫。\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n",
         "height": 420,
         "width": 600,
         "color": 4

@@ -249,12 +249,52 @@
     },
     {
       "parameters": {
-        "jsCode": "// v1.3 2026-04-21: 通知 backend 更新專案狀態\nconst vars = $('Extract Payload').first().json;\nconst qa = $('Parse QA JSON').first().json;\nreturn [{\n  json: {\n    folder_path: vars.folder_path,\n    project_name: vars.project_name,\n    collection_name: '',\n    status: 'Step 43 進行中',\n    chunk_count: qa.count || 0,\n    message: `Generated ${qa.count || 0} QA questions`\n  }\n}];"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "folder_path",
+              "value": "={{ $('Extract Payload').first().json.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "project_name",
+              "value": "={{ $('Extract Payload').first().json.project_name }}",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "collection_name",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "c4",
+              "name": "status",
+              "value": "Step 43 進行中",
+              "type": "string"
+            },
+            {
+              "id": "c5",
+              "name": "chunk_count",
+              "value": "={{ $('Parse QA JSON').first().json.count || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "c6",
+              "name": "message",
+              "value": "={{ 'Generated ' + ($('Parse QA JSON').first().json.count || 0) + ' QA questions' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "n-build-cb",
       "name": "Build Callback",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         2000,
         300
@@ -292,7 +332,7 @@
     },
     {
       "parameters": {
-        "content": "# #03 - DataValidation MD→QA Generic (v1.7)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — 修正「n8n 跑完但 backend 狀態卡進行中」：補上 Callback to Backend 節點打 `/webhook/n8n`（status='Step 43 進行中'），orchestrator 才能串到 #04 或把單步觸發判為已完成\n- **v1.2 (2026-04-21)** — 新增 Cloud AI 備援\n- **v1.1 (2026-04-21)** — 加 `folder_id` 防呆；10 題 QA 除了寫 DB 也寫檔\n- **v1.0 (2026-04-20)** — 初版\n\n**Provider 切換:**\n```\nUse Ollama? IF ollama_main_model notEmpty\n  true  → Ollama /api/chat\n  false → Cloud AI /chat/completions\n```\n\n**Callback 路徑 (v1.3 新增):**\nWrite QA → Save to Backend DB (`/qc/save-test-questions` 存題庫)\n             → Build Callback → Callback to Backend (`/webhook/n8n` 更新專案狀態)\n\n**Trigger:** `POST /webhook/tigerai-step3`\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_main_model\": \"\",              // 空 → 走 cloud\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_model\": \"gpt-5-mini\",\n  \"backend_url\": \"http://tigerai-backend:3060\",\n  \"question_count\": 10\n}\n```\n- v1.5 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n- v1.7 (2026-05-24): chat 改用通用子工作流 Sub-Chat-Local/Cloud（IF ai_provider 分流，原生 agent）",
+        "content": "# #03 - DataValidation MD→QA Generic (v1.7)\n\n## 版本歷史\n- **v1.3 (2026-04-21)** — 修正「n8n 跑完但 backend 狀態卡進行中」：補上 Callback to Backend 節點打 `/webhook/n8n`（status='Step 43 進行中'），orchestrator 才能串到 #04 或把單步觸發判為已完成\n- **v1.2 (2026-04-21)** — 新增 Cloud AI 備援\n- **v1.1 (2026-04-21)** — 加 `folder_id` 防呆；10 題 QA 除了寫 DB 也寫檔\n- **v1.0 (2026-04-20)** — 初版\n\n**Provider 切換:**\n```\nUse Ollama? IF ollama_main_model notEmpty\n  true  → Ollama /api/chat\n  false → Cloud AI /chat/completions\n```\n\n**Callback 路徑 (v1.3 新增):**\nWrite QA → Save to Backend DB (`/qc/save-test-questions` 存題庫)\n             → Build Callback → Callback to Backend (`/webhook/n8n` 更新專案狀態)\n\n**Trigger:** `POST /webhook/tigerai-step3`\n\n**Input body:**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_main_model\": \"\",              // 空 → 走 cloud\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_model\": \"gpt-5-mini\",\n  \"backend_url\": \"http://tigerai-backend:3060\",\n  \"question_count\": 10\n}\n```\n- v1.5 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n- v1.7 (2026-05-24): chat 改用通用子工作流 Sub-Chat-Local/Cloud（IF ai_provider 分流，原生 agent）\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n",
         "height": 460,
         "width": 500,
         "color": 4

@@ -178,12 +178,28 @@
     },
     {
       "parameters": {
-        "jsCode": "// v1.0 2026-05-23: 聚合所有檔的 QC 判定 → 單一物件丟給 backend /qc/exclude\nconst vars = $('Extract Payload').first().json;\nconst results = $input.all().map(i => i.json).filter(r => r.file_name);\nreturn [{ json: { folder_path: vars.folder_path, results } }];\n"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "folder_path",
+              "value": "={{ $('Extract Payload').first().json.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "results",
+              "value": "={{ $input.all().map(i => i.json).filter(r => r.file_name) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "n_buildex",
       "name": "Build Exclude Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         1500,
         300
@@ -221,12 +237,52 @@
     },
     {
       "parameters": {
-        "jsCode": "// v1.0 2026-05-23: 組 callback → backend /webhook/n8n（status 任意非空即可，編排靠 DB 的 meta.status='QC 進行中' 推進到 Step4）\nconst vars = $('Extract Payload').first().json;\nlet ex = {};\ntry { ex = $('Exclude FAIL → Backend').first().json || {}; } catch (e) { ex = {}; }\nreturn [{ json: {\n  folder_path: vars.folder_path,\n  project_name: vars.project_name,\n  collection_name: vars.collection_name,\n  status: 'QC 完成',\n  qc_excluded: ex.excluded || 0,\n  qc_moved: ex.moved || 0\n} }];\n"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1",
+              "name": "folder_path",
+              "value": "={{ $('Extract Payload').first().json.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "d2",
+              "name": "project_name",
+              "value": "={{ $('Extract Payload').first().json.project_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d3",
+              "name": "collection_name",
+              "value": "={{ $('Extract Payload').first().json.collection_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d4",
+              "name": "status",
+              "value": "QC 完成",
+              "type": "string"
+            },
+            {
+              "id": "d5",
+              "name": "qc_excluded",
+              "value": "={{ $('Exclude FAIL → Backend').first().json.excluded || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "d6",
+              "name": "qc_moved",
+              "value": "={{ $('Exclude FAIL → Backend').first().json.moved || 0 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "n_buildcb",
       "name": "Build Callback",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         1900,
         300
@@ -264,7 +320,7 @@
     },
     {
       "parameters": {
-        "content": "## #03b AI 品質閘門 (AI Quality Gate) v1.0\n\n**用途**：Step3→Step4 之間，用 LLM 對 Step2-MD2JSON 的 chunk 做語義審查；FAIL 的整個 .json 移到 `Step2-MD2JSON/_excluded/`，不進向量庫（#04 glob 為 `*.json` 非遞迴，自動跳過子目錄）。\n\n**可開關**：backend `qc_ai_enabled=true` 才會被編排觸發（預設關，不影響現有 pipeline）。pass_score / prompt 由 backend 帶入 payload。\n\n**原生節點**：QC Judge = `@n8n/n8n-nodes-langchain.agent` + `lmChatOpenAi`（OpenAiaccount 憑證）。\n\n**換 QC 模型**：改 \"OpenAI Chat (QC)\" 節點的 model（目前 gpt-5.4-mini）。地端切換留待 階段2。\n\n### 變更歷史\n- v1.0 (2026-05-23): 初版。native LangChain QC → /qc/exclude 移檔 → callback 進 Step4。\n",
+        "content": "## #03b AI 品質閘門 (AI Quality Gate) v1.0\n\n**用途**：Step3→Step4 之間，用 LLM 對 Step2-MD2JSON 的 chunk 做語義審查；FAIL 的整個 .json 移到 `Step2-MD2JSON/_excluded/`，不進向量庫（#04 glob 為 `*.json` 非遞迴，自動跳過子目錄）。\n\n**可開關**：backend `qc_ai_enabled=true` 才會被編排觸發（預設關，不影響現有 pipeline）。pass_score / prompt 由 backend 帶入 payload。\n\n**原生節點**：QC Judge = `@n8n/n8n-nodes-langchain.agent` + `lmChatOpenAi`（OpenAiaccount 憑證）。\n\n**換 QC 模型**：改 \"OpenAI Chat (QC)\" 節點的 model（目前 gpt-5.4-mini）。地端切換留待 階段2。\n\n### 變更歷史\n- v1.0 (2026-05-23): 初版。native LangChain QC → /qc/exclude 移檔 → callback 進 Step4。\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n",
         "height": 360,
         "width": 460
       },

@@ -474,6 +474,10 @@ def main() -> int:
         help="Skip credential rewire pass (rebinding workflow OpenAI/etc creds to your n8n credentials by name match).",
     )
     parser.add_argument(
+        "--check-only", action="store_true",
+        help="Pre-flight check mode: run all detections (RAG dir, OpenGenie services, n8n credentials, workflow preview), print status, then EXIT WITHOUT IMPORTING anything. Use this FIRST to verify the environment is ready, then re-run without --check-only to actually deploy.",
+    )
+    parser.add_argument(
         "--backend-url", default=os.environ.get("BACKEND_URL", ""),
         help="Backend URL for settings update (default: auto-probe localhost:8888 then :8088, or set $BACKEND_URL).",
     )
@@ -539,6 +543,8 @@ def main() -> int:
     print(f"workflow dir : {workflow_dir}")
     print(f"workflows    : {len(files)}")
     print(f"force        : {args.force}")
+    if args.check_only:
+        print(f"MODE         : CHECK-ONLY (no import/activate)")
     print()
 
     # 2. Existing
@@ -553,6 +559,57 @@ def main() -> int:
         if n:
             name_to_existing[n] = wf
     print(f"Existing workflows on server: {len(name_to_existing)}")
+
+    # v1.0.8: pre-flight — verify n8n has credentials for workflow types
+    # Workflows reference openAiApi (5 workflows). If user hasn't created one
+    # in n8n UI yet, --force install will succeed import but cred rewire will
+    # FAIL and activation will report missing credentials at runtime.
+    print()
+    print("=" * 60)
+    print("Pre-flight: n8n credentials readiness")
+    print("=" * 60)
+    cred_check_ok = True
+    try:
+        cred_list_raw = api_get(base_url, "/credentials", api_key)
+        cred_list = cred_list_raw.get("data", cred_list_raw) if isinstance(cred_list_raw, dict) else cred_list_raw
+        if not isinstance(cred_list, list): cred_list = []
+        types_present = sorted({c.get("type") for c in cred_list if c.get("type")})
+        print(f"[cred-check] you have {len(cred_list)} credential(s):")
+        for t in types_present:
+            count = sum(1 for c in cred_list if c.get("type") == t)
+            names = [c.get("name", "?") for c in cred_list if c.get("type") == t]
+            print(f"             - {t} x{count}: {names}")
+        # Workflows shipped here need at least openAiApi
+        REQUIRED_TYPES = {"openAiApi"}
+        missing = REQUIRED_TYPES - set(types_present)
+        if missing:
+            cred_check_ok = False
+            print(f"[cred-check] MISSING required credential type(s): {sorted(missing)}")
+            print(f"             Workflows referencing these will fail at activation.")
+            print(f"             FIX: open n8n UI → Settings → Credentials → New → pick 'OpenAI'")
+            print(f"                  paste your API key → Save (any name works)")
+            print(f"             Then re-run this script.")
+        else:
+            print(f"[cred-check] OK: all required credential types present")
+    except ApiError as e:
+        print(f"[cred-check] WARN: could not list credentials ({e.status}); your n8n API key may lack credentials:read scope.")
+        print(f"             Continuing, but credential rewire phase will also be skipped.")
+        cred_check_ok = None  # unknown
+    print()
+
+    # v1.0.8: if check-only mode, stop here (after all pre-flights)
+    if args.check_only:
+        print("=" * 60)
+        print("CHECK-ONLY SUMMARY")
+        print("=" * 60)
+        print(f"  workflows that would import: {sum(1 for f in files if read_json(f).get('name') not in name_to_existing)} new, {sum(1 for f in files if read_json(f).get('name') in name_to_existing)} existing")
+        print(f"  credentials ready: {'YES' if cred_check_ok else 'NO — fix before --force install' if cred_check_ok is False else 'UNKNOWN'}")
+        print(f"  n8n container ensure RAG/: see [rag-check] section above")
+        print(f"  OpenGenie services detected: see [svc-detect] section above")
+        print()
+        print("If everything above shows OK, re-run WITHOUT --check-only to actually deploy:")
+        print(f"  python3 {Path(__file__).name} --force")
+        return 0 if cred_check_ok is not False else 1
 
     # 3. Per-file action
     # results: name -> {id, status, error}

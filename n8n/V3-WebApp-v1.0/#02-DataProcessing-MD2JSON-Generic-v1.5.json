@@ -288,12 +288,34 @@
     },
     {
       "parameters": {
-        "jsCode": "// If no system_prompt in payload, fail fast with clear error\nreturn [{\n  json: {\n    error: 'system_prompt missing from webhook payload. Make sure the project has a rule_id set in projects_metadata.',\n    folder_path: $('Extract Payload').first().json.folder_path,\n    status: 'error'\n  }\n}];"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-msg",
+              "name": "error",
+              "value": "system_prompt missing from webhook payload. Make sure the project has a rule_id set in projects_metadata.",
+              "type": "string"
+            },
+            {
+              "id": "err-fp",
+              "name": "folder_path",
+              "value": "={{ $('Extract Payload').first().json.folder_path }}",
+              "type": "string"
+            },
+            {
+              "id": "err-st",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "n-error",
       "name": "Error: No Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         600,
         450
@@ -301,7 +323,7 @@
     },
     {
       "parameters": {
-        "content": "# #02 - DataProcessing MD→JSON Generic (v1.5)\n\n## 版本歷史\n- **v1.2 (2026-04-21)** — 新增 Cloud AI 備援：`ollama_main_model` 空字串時自動切到 OpenAI-compatible `/chat/completions`（URL: `cloud_ai_url`, key: `cloud_ai_key`, model: `cloud_ai_model`）。Parser 同時支援 Ollama (`message.content`) 與 OpenAI (`choices[0].message.content`) 回傳格式。\n- **v1.1 (2026-04-21)** — 對齊 前代 邏輯：`folder_id = folder_path.split('/').filter(p=>p)[0]` 取主目錄；讀 `/RAG/{folder_id}/Step1-File2MD/*.md`，寫 `/RAG/{folder_id}/Step2-MD2JSON/*.json`\n- **v1.0 (2026-04-20)** — 初版。取代 前代 @002 + @003：system_prompt 由 Rule 動態帶入；跳過 Step2-DataEng；Ollama 設定全部走 payload\n\n**Provider 切換邏輯 (v1.2):**\n```\nUse Ollama? IF ollama_main_model notEmpty\n  true  → Ollama Chat (/api/chat)\n  false → Cloud AI Chat (/chat/completions, Bearer cloud_ai_key)\n```\n同一個 Parse + Tag JSON 節點接兩條線，所以下游 Write + Callback 完全共用。\n\n**Input body (critical fields):**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"system_prompt\": \"# Role...\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_main_model\": \"qwen3:32b\",        // 空 → 用 cloud_ai\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_model\": \"gpt-5-mini\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n\n**Temperature 0.2** 兩邊一致；Ollama 額外給 `num_ctx=32768`。\n- v1.3 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n- v1.5 (2026-05-24): chat 改用通用子工作流 Sub-Chat-Local/Cloud（IF ai_provider 分流，原生 agent）",
+        "content": "# #02 - DataProcessing MD→JSON Generic (v1.5)\n\n## 版本歷史\n- **v1.2 (2026-04-21)** — 新增 Cloud AI 備援：`ollama_main_model` 空字串時自動切到 OpenAI-compatible `/chat/completions`（URL: `cloud_ai_url`, key: `cloud_ai_key`, model: `cloud_ai_model`）。Parser 同時支援 Ollama (`message.content`) 與 OpenAI (`choices[0].message.content`) 回傳格式。\n- **v1.1 (2026-04-21)** — 對齊 前代 邏輯：`folder_id = folder_path.split('/').filter(p=>p)[0]` 取主目錄；讀 `/RAG/{folder_id}/Step1-File2MD/*.md`，寫 `/RAG/{folder_id}/Step2-MD2JSON/*.json`\n- **v1.0 (2026-04-20)** — 初版。取代 前代 @002 + @003：system_prompt 由 Rule 動態帶入；跳過 Step2-DataEng；Ollama 設定全部走 payload\n\n**Provider 切換邏輯 (v1.2):**\n```\nUse Ollama? IF ollama_main_model notEmpty\n  true  → Ollama Chat (/api/chat)\n  false → Cloud AI Chat (/chat/completions, Bearer cloud_ai_key)\n```\n同一個 Parse + Tag JSON 節點接兩條線，所以下游 Write + Callback 完全共用。\n\n**Input body (critical fields):**\n```json\n{\n  \"folder_path\": \"/proj_A\",\n  \"system_prompt\": \"# Role...\",\n  \"ollama_url\": \"http://ollama:11434\",\n  \"ollama_main_model\": \"qwen3:32b\",        // 空 → 用 cloud_ai\n  \"cloud_ai_url\": \"https://api.openai.com/v1\",\n  \"cloud_ai_key\": \"sk-...\",\n  \"cloud_ai_model\": \"gpt-5-mini\",\n  \"backend_url\": \"http://tigerai-backend:3060\"\n}\n```\n\n**Temperature 0.2** 兩邊一致；Ollama 額外給 `num_ctx=32768`。\n- v1.3 (2026-05-24): 地端分支改 OpenAI-compatible /v1/*（通用 ollama/llamacpp/vllm）+ Authorization header\n- (2026-05-24): 地端/雲端切換改用 ai_provider 設定（IF 判 ai_provider===local）\n- v1.5 (2026-05-24): chat 改用通用子工作流 Sub-Chat-Local/Cloud（IF ai_provider 分流，原生 agent）\n\n--- v1.0.1 2026-05-30: Code -> Set (3 pure-mapping nodes natively: Shape RAG/Direct Response, Error: No Prompt)\n",
         "height": 520,
         "width": 560,
         "color": 4

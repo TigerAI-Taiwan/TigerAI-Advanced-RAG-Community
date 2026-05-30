@@ -141,12 +141,52 @@
     },
     {
       "parameters": {
-        "jsCode": "// RAG 回應整形（Sub-Chat 回來後仍帶 core 的 sources/hits/keywords）\nreturn [{ json: { output: $json.output || '', mode: 'rag', sources: $json.sources || [], hits: $json.hits || 0, keywords_used: $json.keywords_used || [], sessionId: $json.sessionId } }];"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rrr-out",
+              "name": "output",
+              "value": "={{ $json.output || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "rrr-mode",
+              "name": "mode",
+              "value": "rag",
+              "type": "string"
+            },
+            {
+              "id": "rrr-src",
+              "name": "sources",
+              "value": "={{ $json.sources || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "rrr-hits",
+              "name": "hits",
+              "value": "={{ $json.hits || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "rrr-kw",
+              "name": "keywords_used",
+              "value": "={{ $json.keywords_used || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "rrr-sid",
+              "name": "sessionId",
+              "value": "={{ $json.sessionId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "shrag",
       "name": "Shape RAG Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         500,
         100
@@ -154,12 +194,52 @@
     },
     {
       "parameters": {
-        "jsCode": "// Direct 模式：core 內 Agent1 已產生完整答案\nreturn [{ json: { output: $json.answer || '', mode: 'direct', sources: [], hits: 0, keywords_used: [], sessionId: $json.sessionId } }];"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rdr-out",
+              "name": "output",
+              "value": "={{ $json.answer || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "rdr-mode",
+              "name": "mode",
+              "value": "direct",
+              "type": "string"
+            },
+            {
+              "id": "rdr-src",
+              "name": "sources",
+              "value": "={{ [] }}",
+              "type": "array"
+            },
+            {
+              "id": "rdr-hits",
+              "name": "hits",
+              "value": "={{ 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "rdr-kw",
+              "name": "keywords_used",
+              "value": "={{ [] }}",
+              "type": "array"
+            },
+            {
+              "id": "rdr-sid",
+              "name": "sessionId",
+              "value": "={{ $json.sessionId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "shdir",
       "name": "Shape Direct Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         280,
         320
@@ -180,7 +260,7 @@
     },
     {
       "parameters": {
-        "content": "# #05-NonStream-Cloud-v1.0 (2026-05-25)\n\n非串流查詢入口(雲端)。薄入口:Execute #05-RAG-Core 取檢索結果 → Sub-Chat-Cloud 回答。\n\n**Webhook:** POST /webhook/tigerai-query-cloud\n**provider:** cloud(寫死;傳給 core 決定 embed/回答模型)\n**核心:** #05-RAG-Core-v1.0 (0UQpFS2dW2As1JGL)\n\n## 版本歷史\n- v1.0 (2026-05-25): 由 #05-Query-v1.10 拆出(共用檢索核心 + 4 薄入口架構)。多 app 共用此入口,靠 app_name 區分 collection。",
+        "content": "# #05-NonStream-Cloud-v1.0 (2026-05-25)\n\n非串流查詢入口(雲端)。薄入口:Execute #05-RAG-Core 取檢索結果 → Sub-Chat-Cloud 回答。\n\n**Webhook:** POST /webhook/tigerai-query-cloud\n**provider:** cloud(寫死;傳給 core 決定 embed/回答模型)\n**核心:** #05-RAG-Core-v1.0 (0UQpFS2dW2As1JGL)\n\n## 版本歷史\n- v1.0 (2026-05-25): 由 #05-Query-v1.10 拆出(共用檢索核心 + 4 薄入口架構)。多 app 共用此入口,靠 app_name 區分 collection。\n\n--- v1.0.1 2026-05-30: Code -> Set (3 pure-mapping nodes natively: Shape RAG/Direct Response, Error: No Prompt)\n",
         "height": 300,
         "width": 520,
         "color": 5

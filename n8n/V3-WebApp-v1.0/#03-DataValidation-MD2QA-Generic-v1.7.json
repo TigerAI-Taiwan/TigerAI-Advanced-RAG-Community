@@ -177,7 +177,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// v1.2 Accept both Ollama and OpenAI-compatible response shapes\nconst r = $input.first().json;\nconst raw = r.message?.content || r.choices?.[0]?.message?.content || r.response || '';\nlet s = raw.trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(s); }\ncatch (e) {\n  const m = s.match(/\\[[\\s\\S]*\\]/);\n  if (!m) throw new Error('LLM returned non-JSON: ' + s.substring(0, 200));\n  parsed = JSON.parse(m[0]);\n}\nif (!Array.isArray(parsed)) throw new Error('Expected JSON array');\nreturn [{ json: { questions: parsed, count: parsed.length } }];"
+        "jsCode": "// v1.2 Accept both Ollama and OpenAI-compatible response shapes\n// v1.7.1 2026-06-01 fix: 加 r.output — Sub-Chat-Cloud 子工作流回 {output},舊版漏了\n// 只找 message.content/choices/response → raw 空 → JSON.parse 失敗(Unknown error)。\nconst r = $input.first().json;\nconst raw = r.output || r.message?.content || r.choices?.[0]?.message?.content || r.response || '';\nlet s = raw.trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(s); }\ncatch (e) {\n  const m = s.match(/\\[[\\s\\S]*\\]/);\n  if (!m) throw new Error('LLM returned non-JSON: ' + s.substring(0, 200));\n  parsed = JSON.parse(m[0]);\n}\nif (!Array.isArray(parsed)) throw new Error('Expected JSON array');\nreturn [{ json: { questions: parsed, count: parsed.length } }];"
       },
       "id": "n-parse",
       "name": "Parse QA JSON",
@@ -366,6 +366,36 @@
               "id": "md",
               "name": "model",
               "value": "={{ $('Extract Payload').first().json.ai_provider === 'local' ? $('Extract Payload').first().json.ollama_main_model : $('Extract Payload').first().json.cloud_ai_model }}",
+              "type": "string"
+            },
+            {
+              "id": "cau",
+              "name": "cloud_ai_url",
+              "value": "={{ $('Extract Payload').first().json.cloud_ai_url }}",
+              "type": "string"
+            },
+            {
+              "id": "cak",
+              "name": "cloud_ai_key",
+              "value": "={{ $('Extract Payload').first().json.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "olu",
+              "name": "ollama_url",
+              "value": "={{ $('Extract Payload').first().json.ollama_url }}",
+              "type": "string"
+            },
+            {
+              "id": "olk",
+              "name": "ollama_api_key",
+              "value": "={{ $('Extract Payload').first().json.ollama_api_key }}",
+              "type": "string"
+            },
+            {
+              "id": "aip",
+              "name": "ai_provider",
+              "value": "={{ $('Extract Payload').first().json.ai_provider }}",
               "type": "string"
             }
           ]

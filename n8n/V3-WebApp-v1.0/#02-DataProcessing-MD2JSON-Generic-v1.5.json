@@ -404,6 +404,36 @@
               "name": "model",
               "value": "={{ $('Extract Payload').first().json.ai_provider === 'local' ? $('Extract Payload').first().json.ollama_main_model : $('Extract Payload').first().json.cloud_ai_model }}",
               "type": "string"
+            },
+            {
+              "id": "cau",
+              "name": "cloud_ai_url",
+              "value": "={{ $('Extract Payload').first().json.cloud_ai_url }}",
+              "type": "string"
+            },
+            {
+              "id": "cak",
+              "name": "cloud_ai_key",
+              "value": "={{ $('Extract Payload').first().json.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "olu",
+              "name": "ollama_url",
+              "value": "={{ $('Extract Payload').first().json.ollama_url }}",
+              "type": "string"
+            },
+            {
+              "id": "olk",
+              "name": "ollama_api_key",
+              "value": "={{ $('Extract Payload').first().json.ollama_api_key }}",
+              "type": "string"
+            },
+            {
+              "id": "aip",
+              "name": "ai_provider",
+              "value": "={{ $('Extract Payload').first().json.ai_provider }}",
+              "type": "string"
             }
           ]
         },
@@ -478,6 +508,36 @@
               "name": "model",
               "value": "={{ $('Extract Payload').first().json.ai_provider === 'local' ? $('Extract Payload').first().json.ollama_main_model : $('Extract Payload').first().json.cloud_ai_model }}",
               "type": "string"
+            },
+            {
+              "id": "cau",
+              "name": "cloud_ai_url",
+              "value": "={{ $('Extract Payload').first().json.cloud_ai_url }}",
+              "type": "string"
+            },
+            {
+              "id": "cak",
+              "name": "cloud_ai_key",
+              "value": "={{ $('Extract Payload').first().json.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "olu",
+              "name": "ollama_url",
+              "value": "={{ $('Extract Payload').first().json.ollama_url }}",
+              "type": "string"
+            },
+            {
+              "id": "olk",
+              "name": "ollama_api_key",
+              "value": "={{ $('Extract Payload').first().json.ollama_api_key }}",
+              "type": "string"
+            },
+            {
+              "id": "aip",
+              "name": "ai_provider",
+              "value": "={{ $('Extract Payload').first().json.ai_provider }}",
+              "type": "string"
             }
           ]
         },
@@ -551,6 +611,36 @@
               "id": "md",
               "name": "model",
               "value": "={{ $('Extract Payload').first().json.ai_provider === 'local' ? $('Extract Payload').first().json.ollama_main_model : $('Extract Payload').first().json.cloud_ai_model }}",
+              "type": "string"
+            },
+            {
+              "id": "cau",
+              "name": "cloud_ai_url",
+              "value": "={{ $('Extract Payload').first().json.cloud_ai_url }}",
+              "type": "string"
+            },
+            {
+              "id": "cak",
+              "name": "cloud_ai_key",
+              "value": "={{ $('Extract Payload').first().json.cloud_ai_key }}",
+              "type": "string"
+            },
+            {
+              "id": "olu",
+              "name": "ollama_url",
+              "value": "={{ $('Extract Payload').first().json.ollama_url }}",
+              "type": "string"
+            },
+            {
+              "id": "olk",
+              "name": "ollama_api_key",
+              "value": "={{ $('Extract Payload').first().json.ollama_api_key }}",
+              "type": "string"
+            },
+            {
+              "id": "aip",
+              "name": "ai_provider",
+              "value": "={{ $('Extract Payload').first().json.ai_provider }}",
               "type": "string"
             }
           ]

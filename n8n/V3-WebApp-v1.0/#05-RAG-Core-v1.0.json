@@ -420,7 +420,7 @@
             {
               "id": "g1",
               "name": "context",
-              "value": "={{ (($input.first().json.result) || []).map((h, i) => '[' + (i+1) + '] (score=' + (typeof h.score === 'number' ? h.score.toFixed(3) : '-') + (h.payload && (h.payload.original_file || h.payload.source_file) ? ', ' + (h.payload.original_file || h.payload.source_file) : '') + ')\n' + ((h.payload && h.payload.text) || '')).join('\n\n') }}",
+              "value": "={{ (($input.first().json.result) || []).map((h, i) => '[' + (i+1) + '] (score=' + (typeof h.score === 'number' ? h.score.toFixed(3) : '-') + (h.payload && (h.payload.original_file || h.payload.source_file) ? ', ' + (h.payload.original_file || h.payload.source_file) : '') + ')\\n' + ((h.payload && h.payload.text) || '')).join('\\n\\n') }}",
               "type": "string"
             },
             {

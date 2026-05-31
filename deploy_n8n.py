@@ -182,6 +182,32 @@ def activate_workflow(base_url: str, api_key: str, wf_id: str) -> dict:
 # Rewire logic
 # ---------------------------------------------------------------------------
 
+def patch_edition_prefix(workflow: dict, edition: str, with_webhook_prefix: bool) -> dict:
+    """v1.0.18 2026-05-31: import 時加 edition 前綴 — 讓 n8n UI 一眼分辨,且支援同 n8n 多 edition 並排。
+    - workflow.name: 加 `[{Edition}]` 前綴(無空白),如 `[Community]#05b-Cloud-Streaming-...`
+    - webhook path(if with_webhook_prefix): `tigerai-step1` → `tigerai-{edition}-step1`(完整 isolate)
+    Idempotent: 已有正確前綴不重複加。
+    """
+    cap = edition[:1].upper() + edition[1:].lower() if edition else 'Community'
+    name_prefix = f'[{cap}]'
+    original_name = workflow.get('name', '')
+    if not original_name.startswith(name_prefix):
+        workflow['name'] = f'{name_prefix}{original_name}'
+
+    if with_webhook_prefix:
+        wh_prefix = f'tigerai-{edition.lower()}-'
+        for node in workflow.get('nodes', []) or []:
+            if node.get('type') != 'n8n-nodes-base.webhook':
+                continue
+            params = node.get('parameters') or {}
+            path = params.get('path', '')
+            # 'tigerai-step1' → 'tigerai-community-step1'
+            # 已加過前綴(tigerai-community-...)的 skip
+            if path.startswith('tigerai-') and not path.startswith(wh_prefix):
+                params['path'] = path.replace('tigerai-', wh_prefix, 1)
+    return workflow
+
+
 def rewire_workflow_nodes(workflow: dict, name_to_id: dict[str, str]) -> tuple[dict, int]:
     """Walk nodes; fix Execute Workflow references. Returns (workflow, fix_count)."""
     fixes = 0
@@ -505,6 +531,14 @@ def main() -> int:
         "--backend-url", default=os.environ.get("BACKEND_URL", ""),
         help="Backend URL for settings update (default: auto-probe localhost:8888 then :8088, or set $BACKEND_URL).",
     )
+    parser.add_argument(
+        "--edition", default=os.environ.get("TIGERAI_EDITION", "community"),
+        help="Edition name prefix for workflows: '[Community]#NNN-...' in n8n UI (default: community, or $TIGERAI_EDITION).",
+    )
+    parser.add_argument(
+        "--webhook-prefix", action="store_true",
+        help="ALSO patch webhook path with edition prefix: 'tigerai-step1' → 'tigerai-{edition}-step1' (use when sharing n8n instance across editions).",
+    )
     args = parser.parse_args()
 
     # v1.0.15 2026-05-31: TIGERAI_EDITION 處理 — 從 .env(同目錄)讀取,
@@ -702,6 +736,8 @@ def main() -> int:
             import_failures += 1
             continue
 
+        # v1.0.18 2026-05-31: 加 edition 前綴(workflow.name + 選擇性 webhook path)
+        body = patch_edition_prefix(body, args.edition, args.webhook_prefix)
         wf_name = body.get("name") or path.stem
         body["name"] = wf_name
 

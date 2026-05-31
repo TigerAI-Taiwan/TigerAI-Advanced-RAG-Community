@@ -42,8 +42,10 @@ services:
       - tigerai-backend
     # v1.0.15 2026-05-31: healthcheck so `docker compose ps` / orchestrators
     # can tell when nginx is actually serving (not just process-up).
+    # v1.0.20 2026-06-01: 用 -O /dev/null 取代 --spider(busybox wget --spider 對有 body
+    # 的回應會誤判 → 假 unhealthy)。nginx:alpine 有 wget。
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -64,11 +66,13 @@ services:
     networks:
       - stack
     # v1.0.15 2026-05-31: healthcheck against /health endpoint.
+    # v1.0.20: -O /dev/null(node:alpine 有 wget,但 --spider 同樣 flaky)。
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3060/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3060/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   tigerai-splitter:
@@ -97,12 +101,16 @@ services:
       - 'if [ ! -e /srv/RAG ]; then mkdir /srv/RAG 2>/dev/null && echo "[startup] created /srv/RAG/ (real dir)" || (ln -s . /srv/RAG && echo "[startup] created /srv/RAG -> . symlink (fallback)"); fi; exec uvicorn main:app --host 0.0.0.0 --port 8000'
     networks:
       - stack
-    # v1.0.15 2026-05-31: healthcheck via FastAPI /docs (always up if uvicorn live).
+    # v1.0.15 2026-05-31: healthcheck via FastAPI /health.
+    # v1.0.20 2026-06-01 fix: splitter image 是 python:slim,**沒有 wget**(舊 healthcheck
+    # 用 wget → 永遠 unhealthy,假紅燈 + 卡住 depends_on: service_healthy 的 filebrowser)。
+    # 改用 python 內建 urllib(image 一定有 python)。
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8000/docs || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\" || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 20s
     restart: unless-stopped
 
   # v1.0.11: 把 FileBrowser bundle 進來(OpenGenie 預設不含,Tab 02 上傳功能必要)。

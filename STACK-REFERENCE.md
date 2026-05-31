@@ -94,24 +94,75 @@ OpenGenie 依硬體平台出三個 compose stack。**container 命名 / volume �
 
 ---
 
-## 4. AI 該怎麼用本文件(建議流程)
+## 4. AI 該怎麼用本文件(強制 probe 流程)
 
+> **v1.0.18 2026-06-01:絕對不可套本文件預設值寫 .env**。本文件只是「OpenGenie 通常出廠長這樣」的參考;每台機器都可能不同,**install AI 不 probe 就上一定踩坑**。
+
+### 必做 probe 順序(不可跳)
+
+**Step 1 — 盤點實際容器**(找真實 container_name,不用本文件預設)
+```bash
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
 ```
-1. 讀 AGENTS.md 理解 TigerAI 在做什麼、需要什麼
-2. 讀本文件理解 OpenGenie 通常長什麼樣
-3. 跑 deploy_n8n.py --probe → 拿到當前機器 docker ps / networks / mounts 的 JSON 報告
-4. 對比 probe 結果 × 本文件 → 自己判斷:
-   - 是哪個 OpenGenie 變體?(看 Qdrant 名稱:qdrant 還是 qdrant-nvidia)
-   - 缺哪些服務?(沒 postgres → 不能裝 TigerAI,先去裝 OpenGenie)
-   - container 名跟參考不同?(可能是 fork / 改名,自己對應)
-   - PG/Redis 帳密是預設還是改過?(docker inspect 看 env)
-5. 自己寫一份 settings.json(根據 probe 結果決定的真實值)
-6. deploy_n8n.py --apply settings.json
-7. deploy_n8n.py --import-workflows
-8. 自己用瀏覽器 / curl 驗收
+從這個輸出找:
+- OWUI 容器(常見:`openwebui-main` / `openwebui` / **`open-webui`(有 dash)** / `openwebui-worker-NN`)
+- Qdrant(`qdrant` / `qdrant-nvidia` / `qdrant-tigerai`)
+- Docling(`docling` / **`docling-intel`** / `docling-cpu` / `docling-gpu`)
+- n8n(`n8n-main` / `n8n` / **`ai-customer-service-n8n`**(早期 YAGEO 殘留))
+- Postgres / Redis(通常名字穩定)
+
+**Step 2 — 每個 service 的 network**(找 TigerAI 容器要 attach 哪個 network)
+```bash
+for c in <list of containers from Step 1>; do
+  printf "%-30s " "$c:"
+  docker inspect $c --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+done
+```
+- 選**所有依賴 service 共識最高的 network** 當 STACK_NETWORK
+- 有些 service 只在單一 network(例 `docling-intel` 只在 `tigerai-net`)→ 兩條解法:
+  - (a) `docker network connect <STACK_NETWORK> <service>` 把 service 多接一條(原 network 不動,不打斷既有用戶 ✓ 推薦)
+  - (b) STACK_NETWORK 改跟那個 service 走
+
+**Step 3 — 拿 PG/n8n 帳密 / port / env**
+```bash
+docker inspect <pg_container> --format '{{range .Config.Env}}{{.}}{{println}}{{end}}' | grep -E 'POSTGRES_(USER|PASSWORD|DB)'
+docker inspect <n8n_container> --format '{{range .Config.Env}}{{.}}{{println}}{{end}}' | grep -E 'N8N_'
+```
+- 預設值常被改,不可套本文件 `tigerai` 寫死
+
+**Step 4 — 寫 .env**
+- 每個 `*_HOST` / `STACK_NETWORK` 值都來自 Step 1-3 probe,**不是 copy 本文件表格**
+- 心法:本文件給「typical 預設」,user 機器**一定有差異**
+
+**Step 5 — 起容器 + 驗 DNS**
+```bash
+docker compose up -d
+sleep 15
+# 從 backend 容器內測 DNS,確認對外 service 解析得到
+docker exec <backend_container> node -e "require('dns').lookup('<owui_host>',(e,a)=>console.log(e?e.code:a))"
+docker exec <backend_container> node -e "require('dns').lookup('<docling_host>',(e,a)=>console.log(e?e.code:a))"
+```
+- 任一 EAI_AGAIN / ENOTFOUND → 該 service 不在你 attach 的 network,回 Step 2 修
+
+**Step 6 — deploy n8n workflow + settings**
+```bash
+python3 deploy_n8n.py --check-only       # 先 dry-run 看狀況
+python3 deploy_n8n.py --apply settings.json --import-workflows --edition community --webhook-prefix
 ```
 
-**不用照本文件死背任何值**。本文件給的是「OpenGenie 預設出廠長這樣」,但每台機器都可能不同 — AI 的工作就是把差異弄清楚。
+**Step 7 — 用瀏覽器 / Tab 07「測試連線」驗收**
+- 所有 service health 都綠 → 才算 install 成功
+- 任一紅 → 看 docker logs 對應容器找 root cause
+
+### 常見踩坑(避免重蹈)
+
+| 坑 | 表現 | 修法 |
+|---|---|---|
+| 套預設 `openwebui-main` 但實際 `open-webui` | backend log `EAI_AGAIN openwebui-main` | .env 改實際 container_name |
+| Docling 不在 STACK_NETWORK | backend log `EAI_AGAIN docling-intel` | `docker network connect ai_stack_net docling-intel` |
+| n8n 既有 WebApp workflow 用 `/webhook/tigerai-stepN` | community 部署 webhook 撞 | 用 `--webhook-prefix` 跟 backend `WEBHOOK_PREFIX=1` |
+| PG schema 共用 | community 改 settings 污染 webapp | `PG_SCHEMA=tigerai_community` |
+| pg_password 套預設 `tigerai` | 連 PG 失敗 | `docker inspect postgres` 拿真值 |
 
 ---
 

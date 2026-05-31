@@ -194,6 +194,20 @@ def patch_edition_prefix(workflow: dict, edition: str, with_webhook_prefix: bool
     if not original_name.startswith(name_prefix):
         workflow['name'] = f'{name_prefix}{original_name}'
 
+    # v1.0.21 2026-06-01 fix: workflow.name 加前綴後,executeWorkflow 節點的
+    # cachedResultName 也必須跟著加,否則 rewire_workflow_nodes 用 cachedResultName
+    # 對 name_to_id(已是 [Edition]xxx)永遠 match 不到 → __REWIRE_BY_NAME__ 不被替換
+    # → 4 個有 sub-workflow 引用的 workflow activate 失敗(Cannot publish: references
+    # __REWIRE_BY_NAME__ which is not published)。
+    for node in workflow.get('nodes', []) or []:
+        if node.get('type') != 'n8n-nodes-base.executeWorkflow':
+            continue
+        wf_ref = (node.get('parameters') or {}).get('workflowId')
+        if isinstance(wf_ref, dict):
+            cached = wf_ref.get('cachedResultName')
+            if cached and not cached.startswith(name_prefix):
+                wf_ref['cachedResultName'] = f'{name_prefix}{cached}'
+
     if with_webhook_prefix:
         wh_prefix = f'tigerai-{edition.lower()}-'
         for node in workflow.get('nodes', []) or []:
@@ -895,45 +909,62 @@ def main() -> int:
         print()
 
     # 6. Activation pass
+    # v1.0.21 2026-06-01 fix: n8n 要求被引用的 sub-workflow 必須先 active,父 workflow 才能 active。
+    # 舊版單趟照 dict 順序 activate → 父在子之前就 fail(Cannot publish: references X which is
+    # not published)。改成「多趟重試直到不再有進展」:每趟把還沒 active 的試一次,有人成功就
+    # 再來一趟(因為它可能是別人的依賴)。最多跑 (workflow 數) 趟,收斂後剩下的才算真失敗。
     activation_failures = 0
     if args.no_activate:
         print("Activation skipped (--no-activate).")
     else:
-        print("Activation pass ...")
+        print("Activation pass (multi-round, leaves-first auto-resolve) ...")
+        pending = []
         for wf_name, info in results.items():
             if info["status"] not in ("created", "skipped"):
                 continue
             wf_id = info["id"]
-            # v1.0.15 2026-05-31: 若 cred rewire 階段這支 wf 壞掉,別 activate;
-            # 活化一個 cred 殘缺的 workflow 只會把問題拖到 runtime 才爆。
             if wf_id in cred_broken_wf_ids:
                 print(f"  [SKIP-ACTIVATE] {wf_name}  (cred rewire failed; fix in n8n UI then activate manually)")
                 info["status"] = info["status"] + "+cred-broken"
                 info["error"] = "cred rewire failed; manual fix required"
                 activation_failures += 1
                 continue
-            try:
-                activate_workflow(base_url, api_key, wf_id)
-                # don't overwrite 'created' label; append activation flag
-                info["status"] = (
-                    "created+activated" if info["status"] == "created"
-                    else "skipped+activated"
-                )
-                print(f"  [ACTIVE] {wf_name}  (id={wf_id})")
-            except ApiError as e:
-                # Already-active workflows return 400 on some n8n versions;
-                # treat the explicit "already active" wording as success.
-                if "already active" in (e.body or "").lower():
-                    info["status"] = (
-                        "created+activated" if info["status"] == "created"
-                        else "skipped+activated"
-                    )
-                    print(f"  [ACTIVE] {wf_name}  (already active)")
-                    continue
-                print(f"  [ACTIVE-FAIL] {wf_name}: HTTP {e.status}\n{e.body[:300]}")
-                info["status"] = info["status"] + "+activate-failed"
-                info["error"] = f"activate: {e.status}"
-                activation_failures += 1
+            pending.append((wf_name, info))
+
+        max_rounds = max(1, len(pending))
+        last_err = {}
+        for _round in range(max_rounds):
+            if not pending:
+                break
+            still_pending = []
+            made_progress = False
+            for wf_name, info in pending:
+                wf_id = info["id"]
+                try:
+                    activate_workflow(base_url, api_key, wf_id)
+                    info["status"] = "created+activated" if info["status"] == "created" else "skipped+activated"
+                    print(f"  [ACTIVE] {wf_name}  (id={wf_id})")
+                    made_progress = True
+                except ApiError as e:
+                    if "already active" in (e.body or "").lower():
+                        info["status"] = "created+activated" if info["status"] == "created" else "skipped+activated"
+                        print(f"  [ACTIVE] {wf_name}  (already active)")
+                        made_progress = True
+                        continue
+                    # 依賴還沒 active → 留到下一趟重試
+                    last_err[wf_name] = (e.status, e.body)
+                    still_pending.append((wf_name, info))
+            pending = still_pending
+            if not made_progress:
+                break  # 一整趟都沒人成功 → 卡死,剩下的是真失敗
+
+        # 收斂後仍 pending 的才算真失敗
+        for wf_name, info in pending:
+            status, body = last_err.get(wf_name, (0, ""))
+            print(f"  [ACTIVE-FAIL] {wf_name}: HTTP {status}\n{(body or '')[:300]}")
+            info["status"] = info["status"] + "+activate-failed"
+            info["error"] = f"activate: {status}"
+            activation_failures += 1
     print()
 
     # 7. Summary

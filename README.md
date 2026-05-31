@@ -55,6 +55,12 @@ The agent reads both and **installs + wires them end-to-end**. The only thing it
 
 Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover the OpenGenie stack → `docker compose up` → import n8n workflows → install the Open WebUI pipes → set your Cloud AI key.
 
+> **Env vars worth knowing** (full list in `.env.example`, see also [INSTALL.md](INSTALL.md) §2):
+> - `TIGERAI_EDITION=community` — edition tag (do not change; Pro/Enterprise images use their own value).
+> - `N8N_HOST=n8n-main` — canonical OpenGenie main n8n container name (override if your stack uses a different name).
+> - `SETTINGS_SECRET` / `TRANSIT_SECRET` — **MUST** be set to strong random strings in production (`openssl rand -hex 32`); leaving them blank works for local dev only — backend will auto-generate per-restart values that break multi-instance and persist nothing.
+> - `PG_PASSWORD` / `FB_PASSWORD` — defaults are for local dev only; **change in production** (FileBrowser enforces ≥12 chars).
+
 ## Editions
 
 | | **Community** (this repo) | **Pro / Enterprise** |

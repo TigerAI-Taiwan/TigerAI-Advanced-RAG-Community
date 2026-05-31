@@ -158,7 +158,7 @@
       ],
       "credentials": {
         "openAiApi": {
-          "id": "j9NcDQ1CpW9X6v2Z",
+          "id": "__REWIRE_CRED_BY_TYPE__",
           "name": "OpenAiaccount"
         }
       }
@@ -320,7 +320,7 @@
     },
     {
       "parameters": {
-        "content": "## #03b AI 品質閘門 (AI Quality Gate) v1.0\n\n**用途**：Step3→Step4 之間，用 LLM 對 Step2-MD2JSON 的 chunk 做語義審查；FAIL 的整個 .json 移到 `Step2-MD2JSON/_excluded/`，不進向量庫（#04 glob 為 `*.json` 非遞迴，自動跳過子目錄）。\n\n**可開關**：backend `qc_ai_enabled=true` 才會被編排觸發（預設關，不影響現有 pipeline）。pass_score / prompt 由 backend 帶入 payload。\n\n**原生節點**：QC Judge = `@n8n/n8n-nodes-langchain.agent` + `lmChatOpenAi`（OpenAiaccount 憑證）。\n\n**換 QC 模型**：改 \"OpenAI Chat (QC)\" 節點的 model（目前 gpt-5.4-mini）。地端切換留待 階段2。\n\n### 變更歷史\n- v1.0 (2026-05-23): 初版。native LangChain QC → /qc/exclude 移檔 → callback 進 Step4。\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n\n--- v1.0.6 2026-05-31: Removed hardcoded URL fallbacks (docling/qdrant/ollama/backend) — backend now ALWAYS sends these in webhook payload. Workflow fails loud if URL missing, no silent container-name drift.\n",
+        "content": "## #03b AI 品質閘門 (AI Quality Gate) v1.0\n\n**用途**：Step3→Step4 之間，用 LLM 對 Step2-MD2JSON 的 chunk 做語義審查；FAIL 的整個 .json 移到 `Step2-MD2JSON/_excluded/`，不進向量庫（#04 glob 為 `*.json` 非遞迴，自動跳過子目錄）。\n\n**可開關**：backend `qc_ai_enabled=true` 才會被編排觸發（預設關，不影響現有 pipeline）。pass_score / prompt 由 backend 帶入 payload。\n\n**原生節點**：QC Judge = `@n8n/n8n-nodes-langchain.agent` + `lmChatOpenAi`（OpenAiaccount 憑證）。\n\n**換 QC 模型**：改 \"OpenAI Chat (QC)\" 節點的 model（目前 gpt-5.4-mini）。地端切換留待 階段2。\n\n### 變更歷史\n- v1.0 (2026-05-23): 初版。native LangChain QC → /qc/exclude 移檔 → callback 進 Step4。\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n\n--- v1.0.6 2026-05-31: 本工作流只用 backend_url(QC 不接 docling/qdrant/ollama)。Extract Payload 已無 `||` hardcoded fallback,直接 `$('Extract Payload').first().json.backend_url`,缺欄會在 /qc/exclude 與 /webhook/n8n 呼叫時 fail loud。\n--- v1.0.15 2026-05-31: Sticky 修正——原 v1.0.6 過度宣稱「docling/qdrant/ollama/backend 全移除」,實際此 QC Gate 只有 backend_url 一個 URL。\n",
         "height": 360,
         "width": 460
       },

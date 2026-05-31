@@ -146,7 +146,54 @@ OpenGenie 依硬體平台出三個 compose stack。**container 命名 / volume �
 
 ---
 
-## 7. 不在本文件範圍的事(別在這找答案)
+## 7. RAG/ root convention(訓練檔案掛載慣例)
+
+> v1.0.15(2026-05-31)新增。整合既有 INSTALL.md §2 的「`RAG/` 子目錄自動處理」說明,提供完整對照,讓 AI 在 probe 時不誤判。
+
+### 一句話描述
+
+**n8n workflow 從容器內 `/home/node/.n8n-files/RAG/<project_id>/...` 讀寫專案檔案;TigerAI splitter 容器則從 `/srv/RAG -> .` 自迴圈 symlink 看同一份檔案。兩者透過 OpenGenie 的共享 host volume 對齊。**
+
+### 為什麼要這個 convention
+
+- n8n workflow(`#01` File2MD、`#02` MD2JSON、`#03` MD2QA、`#04` JSON2VectorDB)的檔案路徑是寫死成 `/home/node/.n8n-files/RAG/<project_id>/...` 的(寫死才能跨機器搬 workflow,不必每次改節點)。
+- splitter / backend 從容器內 `/srv/RAG/<project_id>/...` 看同一份(splitter 預設 `SPLITTER_FILES_ROOT=/srv/RAG`)。
+- 同一個 host 目錄(`RAG_FILES_PATH`)分別 bind 到兩個容器,**容器內路徑不同但對應到同一份檔案**,所以 n8n 寫的檔案 splitter / backend 看得到、反之亦然。
+
+### v1.0.4+ 起的 splitter 自動處理
+
+splitter 容器啟動時會自動在 `/srv/` 建一個 `RAG -> .` 自迴圈 symlink,讓「不論 host 是否預先 mkdir 一層 `RAG/`」都能對齊 n8n 預期的路徑結構。**Install AI 不用手動 mkdir / ln,跟著 `docker compose up -d` 就完成**。
+
+### Host 路徑(`RAG_FILES_PATH`)怎麼決定
+
+優先順序:
+
+1. **跟 OpenGenie 既有 FileBrowser / n8n 共用 host 目錄**(最常見):用 `docker inspect <fb-or-n8n-container>` 找 `/home/node/.n8n-files` 對應的 host source。
+2. 用 `.env` 的 `RAG_FILES_PATH` 自行指定一個 host 目錄(機器上要先存在,且 owner uid/gid 對得上 splitter 容器內的 `PUID/PGID`,預設 `1000:1000`)。
+3. **完全沒設**:docker-compose 會 fallback 到一個 named volume(只有本機 TigerAI 三容器看得到,n8n 看不到 → workflow 會寫不到檔)。
+
+### 驗證 mount 對齊(裝完一定要跑)
+
+```bash
+# 1. splitter 容器內看得到 /srv/RAG?
+docker exec tigerai-splitter ls -la /srv/RAG
+# 應看到 'RAG -> .' symlink,或一個真實的 RAG/ 目錄
+
+# 2. n8n 容器內看得到 /home/node/.n8n-files/RAG?
+docker exec <n8n-container> ls /home/node/.n8n-files/RAG/
+# 上傳一個專案後,應列出 <project_id> 目錄
+
+# 3. 兩邊看到的內容一致?(在 splitter 內建一個檔,n8n 內確認看得到)
+docker exec tigerai-splitter touch /srv/RAG/_probe.txt
+docker exec <n8n-container> ls /home/node/.n8n-files/RAG/_probe.txt   # 應該存在
+docker exec tigerai-splitter rm /srv/RAG/_probe.txt
+```
+
+不一致 = mount 設定不對(常見:`.env` 的 `RAG_FILES_PATH` 跟 OpenGenie n8n 的 mount source 不是同一個 host 目錄)。
+
+---
+
+## 8. 不在本文件範圍的事(別在這找答案)
 
 - TigerAI 內部 workflow 的設計(看 [SDD.md] / TigerAI 自己的文件)
 - 客戶資料、密鑰、production tuning(看部署現場的 secret 管理)

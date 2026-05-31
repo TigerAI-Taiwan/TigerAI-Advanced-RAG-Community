@@ -1,6 +1,9 @@
 # V3-WebApp-v1.0 — TigerAI-WebApp 配套 n8n Workflows
 
-> **目錄定位**：搭配 **TigerAI-WebApp v1.0（含 QC Audit 付費版）** 的 n8n workflow 完整集合。匯入這 5 個就夠。
+> **目錄定位**：搭配 **TigerAI-WebApp v1.0（含 QC Audit 付費版）** 的 n8n workflow 完整集合。匯入本目錄下全部 9 個 workflow 即可。
+
+<!-- v1.0.15 2026-05-31: 數量由「5 個」更正為 9 個(訓練 4 + QC Gate 1 +
+     線上查詢 4: Core/Sub/NonStream/Streaming),與檔案清單一致。 -->
 
 ## 版本對應
 
@@ -8,17 +11,25 @@
 |------|------|------|
 | TigerAI-WebApp | v1.0（Tab 01 Rule Builder + Tab 08 QC Audit） | 2026-04-20 |
 | n8n Workflows | V3-WebApp-v1.0（本目錄，2026-04-21 重新編號） | 2026-04-21 |
-| 前身 | 前代 交付版 8 個 workflow → 本版合併/通用化為 5 個 | — |
+| 前身 | 前代 交付版 8 個 workflow → 重新編號後拆/合為現行 9 個（4 訓練 + 1 QC Gate + 4 線上查詢，含 sub-workflow） | — |
 
-## 檔案清單（編號 01–05 連續）
+## 檔案清單（v1.0.15 2026-05-31 對齊實際檔名）
+
+<!-- v1.0.15 2026-05-31: 表格之前停留在 v1.2/v1.3 與已停用的 #05-Query-Generic,
+     與目錄裡的實檔不符。重整為 4 個訓練 (#01-#04) + 1 個 QC Gate (#03b) +
+     3 個線上查詢 (#05 / #05b / Sub-Chat) 的當前真實檔名。 -->
 
 | 檔案 | Webhook path | 對應流程 |
 |------|--------------|----------|
-| `#01-DataTransferring-Docling-Generic-v1.2.json` | `/webhook/tigerai-step1` | PDF → Markdown（Docling，`folder_id` 防呆） |
-| `#02-DataProcessing-MD2JSON-Generic-v1.2.json`   | `/webhook/tigerai-step2` | MD → JSON（**ollama↔cloud_ai 自動切換**，`folder_id` 防呆） |
-| `#03-DataValidation-MD2QA-Generic-v1.3.json`     | `/webhook/tigerai-step3` | 讀全部 MD → 產 10 題 QA（**ollama↔cloud_ai**）→ 寫檔 + POST DB + **callback `/webhook/n8n`** |
-| `#04-DataIngestion-Generic-v1.3.json`            | `/webhook/tigerai-step4` | JSON → Qdrant（**ollama↔cloud_ai embedding 自動切換**） |
-| `#05-Query-Generic-v1.2.json`                    | `/webhook/tigerai-query` | 線上查詢兩階段 AI（Agent1 / Embed / Agent2 **各自獨立判斷 ollama↔cloud_ai**） |
+| `#01-DataTransferring-Docling-Generic-v1.3.json` | `/webhook/tigerai-step1` | PDF → Markdown（Docling，`folder_id` 防呆） |
+| `#02-DataProcessing-MD2JSON-Generic-v1.5.json`   | `/webhook/tigerai-step2` | MD → JSON（**ollama↔cloud_ai 自動切換**，`folder_id` 防呆） |
+| `#03-DataValidation-MD2QA-Generic-v1.7.json`     | `/webhook/tigerai-step3` | 讀全部 MD → 產 10 題 QA（**ollama↔cloud_ai**）→ 寫檔 + POST DB + **callback `/webhook/n8n`** |
+| `#03b-AIQualityGate-Generic-v1.0.json`           | （由 backend QC 流程呼叫） | AI 品質閘:對 #03 產的 QA 與 chunk 做還原度比對(建議,不自動裁決) |
+| `#04-DataIngestion-Generic-v1.8.json`            | `/webhook/tigerai-step4` | JSON → Qdrant（**ollama↔cloud_ai embedding 自動切換**） |
+| `#05-RAG-Core-v1.0.json`                         | （sub-workflow，被 #05/#05b 呼叫） | 共用 RAG 檢索核心:embedding + Qdrant search + context 組裝 |
+| `#05-NonStream-Cloud-v1.0.json`                  | `/webhook/tigerai-query`        | 線上查詢(非串流，Cloud AI):呼 #05-RAG-Core 取 context 後一次回答 |
+| `#05b-Cloud-Streaming-Generic-v2.0.json`         | `/webhook/tigerai-query-stream` | 線上查詢(SSE 串流，Cloud AI):呼 #05-RAG-Core 後逐 token 回送 |
+| `Sub-Chat-Cloud-v1.0.json`                       | （sub-workflow，被 #05b 呼叫） | Cloud AI 對話 sub-workflow（拆出來便於替換 provider） |
 
 每個 JSON 內部的 sticky note 都有 **版本歷史** 區塊。
 
@@ -68,11 +79,29 @@ Webapp `generateFinalReport()` 會掃所有 `Step3-MD2JSON/*.json` 抽出以下�
 
 ### 1. 匯入 workflow
 
-在 n8n UI → Workflows → Import from File，依序匯入這 3 個 `-v1.0.json`。**先不要 Activate**，先檢查 credentials 和路徑。
+<!-- v1.0.15 2026-05-31: 修正數量(原寫「3 個」是舊版殘留,現為 9 個) -->
+在 n8n UI → Workflows → Import from File，依序匯入本目錄下全部 9 個 `.json` workflow。**先不要 Activate**，先檢查 credentials 和路徑。
+
+#### 1a. OpenAI Credential（自動 rewire，v1.0.15 2026-05-31）
+
+JSON 內 `credentials.openAiApi.id` 已抽掉作者機器的 id，改為 placeholder `__REWIRE_CRED_BY_TYPE__`（受影響：`#03b-AIQualityGate-Generic`、`#05-RAG-Core`、`#05b-Cloud-Streaming-Generic`、`Sub-Chat-Cloud`）。
+
+部署方式擇一：
+
+- **推薦：跑 `deploy_n8n.py`** — 內建 credential rewire pass，會自動：
+  1. 從目標 n8n 抓現有 credentials
+  2. 用 `type=openAiApi` 找第一筆，把 id 寫回 workflow 對應節點
+  3. 若找不到，會印出明確錯誤訊息要求先建 credential
+- **手動匯入：先在 n8n UI 建 credential** —
+  1. n8n UI → Settings → Credentials → New → 選 **OpenAI API**
+  2. 填入你的 OpenAI API key、Save
+  3. 再 Import workflow JSON。匯入時節點會紅圈警告，逐個打開節點→Credential 下拉選剛建的那筆→Save
+  4. 4 個 workflow 都要過一遍（每個只 1 個節點要重綁）
 
 ### 2. 對齊 webhook path（Tab 06 系統設定）
 
-Tab 06 UI 已同步成 5 個欄位，直接填：
+<!-- v1.0.15 2026-05-31: 補上 #05b 串流端點 -->
+Tab 06 UI 直接填：
 
 | TigerAI 欄位 | 填入 |
 |-------------|------|
@@ -80,7 +109,8 @@ Tab 06 UI 已同步成 5 個欄位，直接填：
 | #02 Step 2 (MD→JSON) | `/webhook/tigerai-step2` |
 | #03 Step 3 (MD→10 QA 測試題) | `/webhook/tigerai-step3` |
 | #04 Step 4 (JSON→Qdrant 灌庫) | `/webhook/tigerai-step4` |
-| #05 線上查詢 (Query) | `/webhook/tigerai-query` |
+| #05 線上查詢 — 非串流 (Query) | `/webhook/tigerai-query` |
+| #05b 線上查詢 — SSE 串流 (Query Stream) | `/webhook/tigerai-query-stream` |
 
 backend 狀態機已壓縮（v1.1）：`Step 01 → Step 02 → Step 03 → Step 43 已完成`（原 Step 41/42/43 合併成 #04 一個 workflow，不再分 3 步）。
 
@@ -89,21 +119,30 @@ backend 狀態機已壓縮（v1.1）：`Step 01 → Step 02 → Step 03 → Step
 1. Base URL 填 `http://ollama:11434`
 2. 按 **Refresh Models**
 3. 選 **Main Model**（例 `qwen3:32b`，#02 + QC 稽核 AI 用）
-4. 選 **Embedding Model**（例 `qwen3-embedding-8b`，#05 + QC 覆蓋率用）
-5. 按 **📏** 測維度
+4. 選 **Embedding Model**（鎖 Qwen3-Embedding 系列，例 `qwen3-embedding:0.6b` / `:4b` / `:8b`，#05 + QC 覆蓋率用）
+5. 按 **📏** 測維度（讓 UI 抓回實際維度，不要用猜的）
 6. Save
 
 ### 4. Qdrant Collection 維度
 
-`vectors.size` 必須等於 Embedding Model 回的維度：
+<!-- v1.0.15 2026-05-31: 移除寫死 4096，改依 Qwen3 變體決定（避免與 TROUBLESHOOTING #16 的 0.6b=1024 對照表矛盾） -->
+
+`vectors.size` 必須跟你實際使用的 Embedding Model 對齊，**依採用的 Qwen3-Embedding 變體決定**：
+
+| Qwen3-Embedding 變體 | 維度 |
+|---|---|
+| `qwen3-embedding:0.6b` | 1024 |
+| `qwen3-embedding:4b`   | 2560 |
+| `qwen3-embedding:8b`   | 4096 |
 
 ```bash
+# 把 <DIM> 換成你那支 Embedding 模型實際回的維度
 curl -X PUT http://localhost:6333/collections/your_collection \
   -H "Content-Type: application/json" \
-  -d '{"vectors": {"size": 4096, "distance": "Cosine"}}'
+  -d '{"vectors": {"size": <DIM>, "distance": "Cosine"}}'
 ```
 
-（Qwen3-Embedding-8B = 4096 維）
+> Collection 維度必須跟訓練時用的 embedding model 對齊；建好以後不可改維度（要改只能砍掉 collection 重灌）。後端可用 `GET /embed/current-dim` 確認目前 `{provider, model, dim}`。
 
 ## Payload 規格（backend → n8n）
 
@@ -116,8 +155,8 @@ curl -X PUT http://localhost:6333/collections/your_collection \
   "allowed_formats": "pdf",
   "ollama_url": "http://ollama:11434",
   "ollama_main_model": "qwen3:32b",
-  "ollama_embedding_model": "qwen3-embedding-8b",
-  "ollama_embedding_dim": "4096",
+  "ollama_embedding_model": "qwen3-embedding:0.6b",
+  "ollama_embedding_dim": "1024",
   "cloud_ai_url": "https://api.openai.com/v1",
   "cloud_ai_key": "sk-...",
   "cloud_ai_model": "gpt-5-mini",

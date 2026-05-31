@@ -57,6 +57,12 @@
               "name": "provider",
               "value": "cloud",
               "type": "string"
+            },
+            {
+              "id": "p-burl",
+              "name": "backend_url",
+              "value": "={{ $json.body.backend_url }}",
+              "type": "string"
             }
           ]
         },
@@ -151,9 +157,7 @@
     {
       "parameters": {
         "model": "={{ $json.model }}",
-        "options": {
-          "temperature": 0.2
-        }
+        "options": {}
       },
       "id": "llm",
       "name": "LLM Cloud",
@@ -165,7 +169,7 @@
       ],
       "credentials": {
         "openAiApi": {
-          "id": "j9NcDQ1CpW9X6v2Z",
+          "id": "__REWIRE_CRED_BY_TYPE__",
           "name": "OpenAiaccount"
         }
       }
@@ -190,7 +194,7 @@
     },
     {
       "parameters": {
-        "content": "## #05b-Cloud-Streaming v2.0 (2026-05-25)\n\n串流查詢入口(雲端)。**v2.0 重構**:改為共用 #05-RAG-Core 檢索核心 + inline 串流回答。\n\n**Webhook:** POST /webhook/tigerai-query-stream-cloud(路徑不變,OWUI 串流 app 免改)\n**provider:** cloud(傳給 core 決定 embed/回答模型)\n**核心:** #05-RAG-Core-v1.0 (0UQpFS2dW2As1JGL)\n\n## 版本歷史\n- v2.0 (2026-05-25): 抽掉內嵌檢索,改 Execute #05-RAG-Core(共用檢索核心 + 4 薄入口)。多 app 共用此入口靠 app_name 區分 collection。串流仍 inline(不放子工作流,符合規則)。\n- v1.0 (2026-05-24): 全雲端內嵌檢索 + 串流。\n\n## 設計\n檢索(離散結果)放子工作流不違反「串流不可用子工作流」;只有最終串流 LLM 留 inline。\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n\n--- v1.0.6 2026-05-31: Removed hardcoded URL fallbacks (docling/qdrant/ollama/backend) — backend now ALWAYS sends these in webhook payload. Workflow fails loud if URL missing, no silent container-name drift.\n",
+        "content": "## #05b-Cloud-Streaming v2.0 (2026-05-25)\n\n串流查詢入口(雲端)。**v2.0 重構**:改為共用 #05-RAG-Core 檢索核心 + inline 串流回答。\n\n**Webhook:** POST /webhook/tigerai-query-stream-cloud(路徑不變,OWUI 串流 app 免改)\n**provider:** cloud(傳給 core 決定 embed/回答模型)\n**核心:** (#05-RAG-Core-v1.0)  ← by name,部署時 deploy_n8n.py 重綁\n\n## 版本歷史\n- v2.0 (2026-05-25): 抽掉內嵌檢索,改 Execute #05-RAG-Core(共用檢索核心 + 4 薄入口)。多 app 共用此入口靠 app_name 區分 collection。串流仍 inline(不放子工作流,符合規則)。\n- v1.0 (2026-05-24): 全雲端內嵌檢索 + 串流。\n\n## 設計\n檢索(離散結果)放子工作流不違反「串流不可用子工作流」;只有最終串流 LLM 留 inline。\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n\n--- v1.0.6 2026-05-31: 本工作流只透傳 backend_url(無 docling/qdrant/ollama URL)。Prep Core Input 已無 `||` hardcoded fallback,直接 `$json.body.backend_url`,缺欄 downstream 會 fail loud。\n\n--- v1.0.15 2026-05-31: Sticky 修正——原 v1.0.6 過度宣稱「docling/qdrant/ollama/backend 全移除」,實際本入口僅處理 backend_url 一個欄位;qdrant/ollama URL fallback 真正移除在 (#05-RAG-Core-v1.0) v1.0.15。同步把 16-char stale id `0UQpFS2dW2As1JGL` 改成 by-name 引用避免重部署後失效。\n",
         "height": 360,
         "width": 540,
         "color": 6

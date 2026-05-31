@@ -330,8 +330,30 @@ def ensure_n8n_rag_dir(verbose: bool = True) -> bool:
     # 4. Cross-check: n8n's view of RAG/ vs our splitter's view of /srv/RAG/
     #    v1.0.13 2026-05-31: splitter 端比對改 /srv/RAG/(對齊 RAG/ project root 約定)。
     #    若內容不同,代表 n8n 和 splitter 掛到不同 host 路徑,symlink 救不了 — 大聲 warn。
+    #    v1.0.15 2026-05-31: 不再寫死 "tigerai-splitter";依序嘗試:
+    #      (a) $SPLITTER_CONTAINER_NAME env(user override)
+    #      (b) docker ps 找 image == tigerai-rag-splitter 的 container
+    #      (c) fallback 舊預設 "tigerai-splitter"
+    #    找不到就 skip cross-check(不該因 splitter 命名造成 deploy 失敗)。
+    splitter_container = os.environ.get("SPLITTER_CONTAINER_NAME", "").strip()
+    if not splitter_container:
+        r_ps = run(["docker", "ps", "--filter", "ancestor=tigerai-rag-splitter",
+                    "--format", "{{.Names}}"])
+        cand = [n.strip() for n in (r_ps.stdout or "").splitlines() if n.strip()]
+        if cand:
+            splitter_container = cand[0]
+    if not splitter_container:
+        # last-ditch: legacy name
+        r_legacy = run(["docker", "inspect", "-f", "{{.State.Running}}", "tigerai-splitter"])
+        if r_legacy.returncode == 0 and r_legacy.stdout.strip() == "true":
+            splitter_container = "tigerai-splitter"
+    if not splitter_container:
+        if verbose:
+            print("[rag-check] splitter container not found (no image=tigerai-rag-splitter running,")
+            print("            no $SPLITTER_CONTAINER_NAME set, no legacy 'tigerai-splitter'); skip cross-check.")
+        return True
     r_n8n = run(["docker", "exec", n8n_container, "ls", "/home/node/.n8n-files/RAG/"])
-    r_split = run(["docker", "exec", "tigerai-splitter", "ls", "/srv/RAG/"])
+    r_split = run(["docker", "exec", splitter_container, "ls", "/srv/RAG/"])
     if r_n8n.returncode == 0 and r_split.returncode == 0:
         n8n_entries = set((r_n8n.stdout or "").split())
         split_entries = set((r_split.stdout or "").split())
@@ -485,6 +507,37 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # v1.0.15 2026-05-31: TIGERAI_EDITION 處理 — 從 .env(同目錄)讀取,
+    # 沒寫就追加 TIGERAI_EDITION=community。讓 backend/splitter 容器知道
+    # 自己是 Community 版(影響功能 gating + 遙測標籤),也方便日後升 paid 改一行。
+    # 已存在就尊重不覆蓋(user 可能改成 webapp/advanced 跑混合測試)。
+    env_path = Path(__file__).resolve().parent / ".env"
+    edition_in_file = None
+    if env_path.exists():
+        try:
+            for raw in env_path.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#"): continue
+                if line.startswith("TIGERAI_EDITION="):
+                    edition_in_file = line.split("=", 1)[1].strip()
+                    break
+        except Exception as e:
+            print(f"[edition] WARN: could not read {env_path}: {e}")
+    if edition_in_file:
+        print(f"[edition] {env_path.name} has TIGERAI_EDITION={edition_in_file} (kept as-is)")
+    else:
+        try:
+            line = "\nTIGERAI_EDITION=community\n"
+            if env_path.exists():
+                with env_path.open("a", encoding="utf-8") as f: f.write(line)
+                print(f"[edition] appended TIGERAI_EDITION=community to {env_path}")
+            else:
+                env_path.write_text(line.lstrip(), encoding="utf-8")
+                print(f"[edition] created {env_path} with TIGERAI_EDITION=community")
+        except Exception as e:
+            print(f"[edition] WARN: could not write TIGERAI_EDITION to {env_path}: {e}")
+    print()
+
     # v1.0.5: pre-flight — ensure RAG/ exists at n8n's mount (fixes the
     # "PDF→MD silently succeeds 0 files" failure mode for installs where
     # n8n's mount doesn't have a RAG/ subdir).
@@ -492,7 +545,15 @@ def main() -> int:
         print("=" * 60)
         print("Pre-flight: n8n RAG/ directory check")
         print("=" * 60)
-        ensure_n8n_rag_dir(verbose=True)
+        # v1.0.15 2026-05-31: 之前 return False 被丟掉,workflow 跑起來 PDF→MD
+        # 會「成功 0 筆」靜默失敗。改 hard-fail,user 可加 --skip-rag-check 跳過。
+        if not ensure_n8n_rag_dir(verbose=True):
+            sys.stderr.write(
+                "\nERROR: n8n RAG/ directory check failed (see [rag-check] log above).\n"
+                "       Workflows would silently produce 0 files. Fix the mount/symlink\n"
+                "       or pass --skip-rag-check to bypass this guard.\n"
+            )
+            return 1
         print()
 
     # v1.0.6: pre-flight — auto-detect OpenGenie services + update backend
@@ -599,6 +660,18 @@ def main() -> int:
         cred_check_ok = None  # unknown
     print()
 
+    # v1.0.15 2026-05-31: cred check 失敗 → halt(import 完 activate 也是壞的)。
+    # --force 不可繞過此檢查(--force 只該跳過 "刪掉舊的" 確認,不該跳過 cred 健康度)。
+    # 真要繞過走 --skip-cred-rewire(明確聲明「我知道 cred 沒準備好,要自己手動補」)。
+    if cred_check_ok is False and not args.skip_cred_rewire and not args.check_only:
+        sys.stderr.write(
+            "\nERROR: required n8n credential type(s) missing (see [cred-check] above).\n"
+            "       Workflows would import but fail at activation/runtime.\n"
+            "       FIX (recommended): create the missing credential(s) in n8n UI, then re-run.\n"
+            "       OR pass --skip-cred-rewire to import anyway (you'll bind creds manually after).\n"
+        )
+        return 1
+
     # v1.0.8: if check-only mode, stop here (after all pre-flights)
     if args.check_only:
         print("=" * 60)
@@ -696,11 +769,16 @@ def main() -> int:
 
     # 5b. Credential rewire pass (v1.0.7)
     #     Workflows ship with hardcoded credential IDs from dev env
-    #     (e.g. openAiApi id 'j9NcDQ1CpW9X6v2Z' name 'OpenAiaccount'). Fresh
+    #     (e.g. workflow JSON 帶 source 機器寫死的 openAiApi id 對不上). Fresh
     #     install's auto-generated cred IDs don't match → workflows reference
     #     non-existent creds → activation fails or runtime errors.
     #     Strategy: GET /api/v1/credentials, group by type, rewire by name match
     #     OR single-cred-of-type. Soft-fail if API doesn't expose cred list.
+    # v1.0.15 2026-05-31: 紀錄哪些 wf 在 cred rewire 階段壞掉(API update fail
+    # 或缺型別),activation 必須跳過這些 wf 並印明確 fix 指示。否則 activate
+    # 會把一個 cred 不完整的 workflow 標為 active,runtime 才爆。
+    cred_broken_wf_ids: set[str] = set()
+
     if not args.skip_cred_rewire:
         print("Credential rewire pass (match by type + name) ...")
         try:
@@ -758,12 +836,18 @@ def main() -> int:
                         else:
                             print(f"  [FAIL] {wf_name} node '{node.get('name')}' needs '{cred_type}' but you have NONE of that type; create in n8n UI then re-run --force")
                             cred_warnings += 1
+                            # v1.0.15: 這支 wf cred 殘缺,activation 必須跳過
+                            cred_broken_wf_ids.add(wf_id)
 
                 if changed:
                     try:
                         update_workflow(base_url, api_key, wf_id, wf)
                     except ApiError as e:
                         print(f"  [CRED-UPDATE-FAIL] {wf_name}: HTTP {e.status}\n{e.body[:200]}")
+                        print(f"         → activation of '{wf_name}' will be SKIPPED.")
+                        print(f"         → fix: open this workflow in n8n UI, re-bind credentials manually, then activate.")
+                        # v1.0.15: API 寫回失敗 → cred 還是舊的壞 id,別 activate
+                        cred_broken_wf_ids.add(wf_id)
 
             print(f"  cred rewires: {cred_rewires}, warnings: {cred_warnings}")
         except ApiError as e:
@@ -784,6 +868,14 @@ def main() -> int:
             if info["status"] not in ("created", "skipped"):
                 continue
             wf_id = info["id"]
+            # v1.0.15 2026-05-31: 若 cred rewire 階段這支 wf 壞掉,別 activate;
+            # 活化一個 cred 殘缺的 workflow 只會把問題拖到 runtime 才爆。
+            if wf_id in cred_broken_wf_ids:
+                print(f"  [SKIP-ACTIVATE] {wf_name}  (cred rewire failed; fix in n8n UI then activate manually)")
+                info["status"] = info["status"] + "+cred-broken"
+                info["error"] = "cred rewire failed; manual fix required"
+                activation_failures += 1
+                continue
             try:
                 activate_workflow(base_url, api_key, wf_id)
                 # don't overwrite 'created' label; append activation flag

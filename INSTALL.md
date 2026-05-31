@@ -23,6 +23,11 @@ cp .env.example .env
 ```
 Edit `.env` so each host/URL matches the **actual OpenGenie container names** you found (e.g. `N8N_HOST`, `DOCLING_BASE_URL`, `QDRANT_URL`, `PG_HOST`, `REDIS_HOST`, `OWUI_BASE_URL`). Set `PUBLIC_URL` to a URL users can reach (e.g. `http://<host>:8088`).
 
+> **Default values to know** (v1.0.15):
+> - `TIGERAI_EDITION=community` — edition tag; keep as `community` on this repo.
+> - `N8N_HOST=n8n-main` — canonical OpenGenie main n8n container name. Older docs / forks sometimes used `ai-customer-service-n8n`; if your stack uses that or another name, override here.
+> - **Secrets — production-only warning**: `SETTINGS_SECRET` and `TRANSIT_SECRET` must be set to strong random strings (`openssl rand -hex 32`). Leaving them blank works for a single local container only; backend auto-generates per-restart values that cannot be shared across instances. Default `PG_PASSWORD=tigerai` and `FB_PASSWORD` example value are **for local dev only** — change before exposing the service.
+
 Export the compose vars (or put them in a `.env` next to the compose):
 ```bash
 export STACK_NETWORK=<opengenie network name>

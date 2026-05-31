@@ -14,61 +14,122 @@
     },
     {
       "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.user_content }}",
-        "options": {
-          "systemMessage": "={{ $json.system_prompt || '你是專業 RAG 資料處理助手。' }}"
-        }
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cp1",
+              "leftValue": "={{ $json.ai_provider }}",
+              "rightValue": "local",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
-      "id": "agent",
-      "name": "Chat",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
+      "id": "if-prov",
+      "name": "Use Ollama?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
       "position": [
-        260,
+        220,
         0
       ]
     },
     {
       "parameters": {
-        "model": "={{ $json.model }}",
+        "method": "POST",
+        "url": "={{ $json.ollama_url }}/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.ollama_api_key || 'ollama' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": {{ JSON.stringify($json.model) }},\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt || '你是專業 RAG 資料處理助手。') }} },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.user_content) }} }\n  ],\n  \"stream\": false\n}",
         "options": {
-          "temperature": 0.2
-        }
+          "timeout": 600000
+        },
+        "contentType": "json"
       },
-      "id": "llm",
-      "name": "LLM",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1,
+      "id": "llm-local",
+      "name": "Ollama Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        260,
-        210
-      ],
-      "credentials": {
-        "openAiApi": {
-          "id": "j9NcDQ1CpW9X6v2Z",
-          "name": "OpenAiaccount"
-        }
-      }
+        460,
+        -120
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const inp=$('When Called').first().json;\nreturn $input.all().map((r,i)=>({json: Object.assign({}, $('When Called').all()[i] ? $('When Called').all()[i].json : inp, {output: r.json.output || ''})}));"
+        "method": "POST",
+        "url": "={{ ($json.cloud_ai_url || 'https://api.openai.com/v1') }}/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.cloud_ai_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": {{ JSON.stringify($json.model) }},\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt || '你是專業 RAG 資料處理助手。') }} },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.user_content) }} }\n  ],\n  \"stream\": false\n}",
+        "options": {
+          "timeout": 600000
+        },
+        "contentType": "json"
+      },
+      "id": "llm-cloud",
+      "name": "Cloud AI Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.0.15 2026-05-31: Accept either OpenAI-compatible (choices[0].message.content) or Ollama-native (message.content / response) chat response shapes.\n// Re-attach the original When Called input so downstream nodes (e.g. Parse QA JSON) still see system_prompt/user_content/model/etc.\nconst inp = $('When Called').first().json;\nreturn $input.all().map((r, i) => {\n  const body = r.json || {};\n  const out =\n    body.choices?.[0]?.message?.content ??\n    body.message?.content ??\n    body.response ??\n    '';\n  const baseRaw = $('When Called').all()[i];\n  const base = baseRaw ? baseRaw.json : inp;\n  return { json: Object.assign({}, base, { output: out }) };\n});"
       },
       "id": "shape",
       "name": "Shape Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        520,
+        720,
         0
       ]
     },
     {
       "parameters": {
-        "content": "## Sub-Chat-Cloud v1.0 (2026-05-24)\n通用雲端 chat 子工作流。被 #02/#03/#05 用 Execute Workflow 呼叫。\n輸入: {system_prompt, user_content, model(=cloud_ai_model)} → 回 {...輸入, output}\n原生 agent + lmChatOpenAi(OpenAiaccount credential)\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n\n--- v1.0.6 2026-05-31: Removed hardcoded URL fallbacks (docling/qdrant/ollama/backend) — backend now ALWAYS sends these in webhook payload. Workflow fails loud if URL missing, no silent container-name drift.\n",
-        "height": 220,
-        "width": 420
+        "content": "## Sub-Chat-Cloud v1.0 (2026-05-24)\n通用 chat 子工作流。被 #02/#03/#03b/#05 用 Execute Workflow 呼叫。\n輸入: { ai_provider, system_prompt, user_content, model, ollama_url, ollama_api_key, cloud_ai_url, cloud_ai_key } → 回 { ...輸入, output }\n\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n--- v1.0.6 2026-05-31: Removed hardcoded URL fallbacks (docling/qdrant/ollama/backend) — backend now ALWAYS sends these in webhook payload. Workflow fails loud if URL missing, no silent container-name drift.\n--- v1.0.15 2026-05-31: FIX local-branch bug. 原本不分 ai_provider 都打 OpenAI (line 34 lmChatOpenAi + OpenAiaccount cred)，呼叫端 ai_provider=local 時仍走雲端 → 誤用 cloud key/額度、ollama 自架完全沒被呼叫。改為 If(ai_provider==='local') 分流到兩個 HTTP Request 節點(Ollama / Cloud，皆走 OpenAI-compatible /v1/chat/completions)，移除 langchain Agent + lmChatOpenAi (本子流程無 tool/memory 需求，純 prompt → completion，直 HTTP 等效且免 credential 設定；對齊 #04 的 Ollama/Cloud Embed 雙分支樣式)。Shape Output 同時支援兩種 response shape。\n",
+        "height": 320,
+        "width": 480
       },
       "id": "note",
       "name": "Guide",
@@ -76,7 +137,7 @@
       "typeVersion": 1,
       "position": [
         0,
-        -260
+        -380
       ]
     }
   ],
@@ -85,25 +146,43 @@
       "main": [
         [
           {
-            "node": "Chat",
+            "node": "Use Ollama?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "LLM": {
-      "ai_languageModel": [
+    "Use Ollama?": {
+      "main": [
         [
           {
-            "node": "Chat",
-            "type": "ai_languageModel",
+            "node": "Ollama Chat",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cloud AI Chat",
+            "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Chat": {
+    "Ollama Chat": {
+      "main": [
+        [
+          {
+            "node": "Shape Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cloud AI Chat": {
       "main": [
         [
           {

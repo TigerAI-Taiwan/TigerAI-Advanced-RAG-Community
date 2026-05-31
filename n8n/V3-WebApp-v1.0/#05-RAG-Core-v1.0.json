@@ -14,7 +14,7 @@
     },
     {
       "parameters": {
-        "url": "=http://tigerai-backend:3060/query/config?app_name={{ encodeURIComponent($json.app_name || '') }}&collection_name={{ encodeURIComponent($json.collection_name || '') }}",
+        "url": "={{ $json.backend_url || (() => { throw new Error('backend_url missing from RAG-Core payload (caller must pass it via Prep Core Input)'); })() }}/query/config?app_name={{ encodeURIComponent($json.app_name || '') }}&collection_name={{ encodeURIComponent($json.collection_name || '') }}",
         "options": {
           "timeout": 10000
         }
@@ -30,7 +30,7 @@
     },
     {
       "parameters": {
-        "url": "=http://tigerai-backend:3060/keywords/hierarchy?collection_name={{ encodeURIComponent($json.collection_name || '') }}",
+        "url": "={{ $json.backend_url || (() => { throw new Error('backend_url missing from RAG-Core payload (caller must pass it via Prep Core Input)'); })() }}/keywords/hierarchy?collection_name={{ encodeURIComponent($json.collection_name || '') }}",
         "options": {
           "timeout": 10000
         }
@@ -93,7 +93,7 @@
             {
               "id": "a-qurl",
               "name": "qdrant_url",
-              "value": "={{ $('Fetch Backend Config').item.json.qdrant_url || 'http://qdrant-tigerai:6333' }}",
+              "value": "={{ $('Fetch Backend Config').item.json.qdrant_url || (() => { throw new Error('qdrant_url missing from backend /query/config response (v1.0.15: hardcoded fallback removed, fail loud)'); })() }}",
               "type": "string"
             },
             {
@@ -135,7 +135,7 @@
             {
               "id": "ollama_url",
               "name": "ollama_url",
-              "value": "={{ $('Fetch Backend Config').item.json.ollama_url || 'http://ollama:11434' }}",
+              "value": "={{ $('Fetch Backend Config').item.json.ollama_url || (() => { throw new Error('ollama_url missing from backend /query/config response (v1.0.15: hardcoded fallback removed, fail loud)'); })() }}",
               "type": "string"
             },
             {
@@ -182,10 +182,8 @@
     },
     {
       "parameters": {
-        "model": "gpt-5.4-mini",
-        "options": {
-          "temperature": 0.2
-        }
+        "model": "={{ $json.model || 'gpt-4o-mini' }}",
+        "options": {}
       },
       "id": "n-llm1",
       "name": "OpenAI Chat (Agent1)",
@@ -197,7 +195,7 @@
       ],
       "credentials": {
         "openAiApi": {
-          "id": "j9NcDQ1CpW9X6v2Z",
+          "id": "__REWIRE_CRED_BY_TYPE__",
           "name": "OpenAiaccount"
         }
       }
@@ -649,7 +647,7 @@
     },
     {
       "parameters": {
-        "content": "# #05-RAG-Core v1.0 (2026-05-25)\n\n共用 RAG 檢索核心子工作流。被 4 支查詢入口(非串流×雲地 / 串流×雲地)用 Execute Workflow 呼叫。\n\n## 契約\n- 輸入(呼叫端傳):{ chatInput, app_name, collection_name, sessionId, min_keywords }\n- 內部:Fetch Config(app_name→collection 單一來源)→ Fetch KW → Build Context → Agent1 Intent(雲端,同 #05 現況)→ Route → RAG(embed→qdrant→fallback→context→LLM input)或 Direct\n- 輸出:\n  - route='rag': { user_content, system_prompt, model, context, hits, sources, keywords_used, sessionId, ai_provider, cloud_ai_url/key, ollama_url/key }\n  - route='direct': { answer, sessionId, ai_provider }\n\n## 版本歷史\n- v1.0 (2026-05-25): 從 #05-Query-v1.10 抽出檢索段(Build LLM Input 之前)。intent 暫維持雲端 langchain Agent1+Memory(零行為變更);純地端 intent 切換留作後續。\n\n## 設計理由\n檢索回傳離散結果(非串流),放子工作流不違反「串流不可用子工作流」規則 → 4 支入口共用一份檢索,只差最後 LLM 呼叫。\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n\n--- v1.0.6 2026-05-31: Removed hardcoded URL fallbacks (docling/qdrant/ollama/backend) — backend now ALWAYS sends these in webhook payload. Workflow fails loud if URL missing, no silent container-name drift.\n",
+        "content": "# #05-RAG-Core v1.0 (2026-05-25)\n\n共用 RAG 檢索核心子工作流。被 4 支查詢入口(非串流×雲地 / 串流×雲地)用 Execute Workflow 呼叫。\n\n## 契約\n- 輸入(呼叫端傳):{ chatInput, app_name, collection_name, sessionId, min_keywords }\n- 內部:Fetch Config(app_name→collection 單一來源)→ Fetch KW → Build Context → Agent1 Intent(雲端,同 #05 現況)→ Route → RAG(embed→qdrant→fallback→context→LLM input)或 Direct\n- 輸出:\n  - route='rag': { user_content, system_prompt, model, context, hits, sources, keywords_used, sessionId, ai_provider, cloud_ai_url/key, ollama_url/key }\n  - route='direct': { answer, sessionId, ai_provider }\n\n## 版本歷史\n- v1.0 (2026-05-25): 從 #05-Query-v1.10 抽出檢索段(Build LLM Input 之前)。intent 暫維持雲端 langchain Agent1+Memory(零行為變更);純地端 intent 切換留作後續。\n\n## 設計理由\n檢索回傳離散結果(非串流),放子工作流不違反「串流不可用子工作流」規則 → 4 支入口共用一份檢索,只差最後 LLM 呼叫。\n\n--- v1.0.2 2026-05-30: Code -> Set (Build Callback x5 + Build Exclude Request + Build RAG Context, native expressions with .reduce/.map/.filter)\n--- v1.0.3 2026-05-30: Deploy-ready cleanup (strip readonly fields, dedupe node names, redirect Sub-Chat-Local→Cloud, sentinel for deploy_n8n.py id-rewire)\n\n--- v1.0.6 2026-05-31: [SUPERSEDED — sticky 宣稱已移除但實作未動;見 v1.0.15] Removed hardcoded URL fallbacks (docling/qdrant/ollama/backend).\n\n--- v1.0.15 2026-05-31: 真正移除 hardcoded fallback。v1.0.6 sticky 過度宣稱,當時 Fetch Backend Config / Fetch L1L2L3 / Build Context Vars 還有 `|| 'http://tigerai-backend:3060'`, `|| 'http://qdrant-tigerai:6333'`, `|| 'http://ollama:11434'`。現在:backend_url 由 caller (#05-NonStream-Cloud-v1.0) / (#05b-Cloud-Streaming-Generic-v2.0) 的 Prep Core Input 從 webhook body 傳入;qdrant_url/ollama_url 由 /query/config 回應提供。全部缺欄時 `throw new Error(...)` fail loud。\n",
         "height": 420,
         "width": 600,
         "color": 4

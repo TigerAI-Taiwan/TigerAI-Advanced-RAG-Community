@@ -40,6 +40,13 @@ services:
       - stack
     depends_on:
       - tigerai-backend
+    # v1.0.15 2026-05-31: healthcheck so `docker compose ps` / orchestrators
+    # can tell when nginx is actually serving (not just process-up).
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   tigerai-backend:
@@ -49,10 +56,19 @@ services:
       - "3060"
     environment:
       - TZ=Asia/Taipei
+      # v1.0.15 2026-05-31: edition passthrough (community / webapp / advanced)
+      # so backend can gate features by edition at runtime.
+      - TIGERAI_EDITION=${TIGERAI_EDITION:-community}
     env_file:
       - ./.env
     networks:
       - stack
+    # v1.0.15 2026-05-31: healthcheck against /health endpoint.
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3060/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   tigerai-splitter:
@@ -60,6 +76,10 @@ services:
     container_name: tigerai-splitter
     environment:
       - TZ=Asia/Taipei
+    # v1.0.15 2026-05-31: align with nginx/backend — load .env so splitter
+    # picks up shared config (paths, tokens, callback URLs).
+    env_file:
+      - ./.env
     expose:
       - "8000"
     volumes:
@@ -77,11 +97,24 @@ services:
       - 'if [ ! -e /srv/RAG ]; then mkdir /srv/RAG 2>/dev/null && echo "[startup] created /srv/RAG/ (real dir)" || (ln -s . /srv/RAG && echo "[startup] created /srv/RAG -> . symlink (fallback)"); fi; exec uvicorn main:app --host 0.0.0.0 --port 8000'
     networks:
       - stack
+    # v1.0.15 2026-05-31: healthcheck via FastAPI /docs (always up if uvicorn live).
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8000/docs || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   # v1.0.11: 把 FileBrowser bundle 進來(OpenGenie 預設不含,Tab 02 上傳功能必要)。
   # 不加 tigerai- 前綴:這不是我方產品,是 upstream filebrowser/filebrowser image。
   # --noauth 內部 docker network only,對外經 nginx /api/ proxy 走我方 auth。
+  #
+  # v1.0.15 2026-05-31 (修 Gemini 坑一): filebrowser/filebrowser:latest 是 FROM scratch
+  # (連 /bin/sh 都沒),v1.0.12 用 entrypoint:["/bin/sh","-c"] 在這個 image 上會無限崩潰。
+  # 改回原始 command 不套 shell,/srv/RAG 由 tigerai-splitter 啟動時的 mkdir 邏輯產生
+  # (splitter 跟 FB 都 mount 同一個 host RAG_FILES_PATH,splitter 容器內看到的 /srv/RAG
+  # 就是 host 上的 RAG_FILES_PATH/RAG,FB 容器內也看得到)。用 condition:service_healthy
+  # 等 splitter 確實 healthy 才啟 FB,保證 mkdir 已完成。
   filebrowser:
     image: filebrowser/filebrowser:latest
     container_name: filebrowser
@@ -89,15 +122,22 @@ services:
     volumes:
       - ${RAG_FILES_PATH:-./data/rag}:/srv
       - filebrowser_db:/database
-    # v1.0.12: --root=/srv/RAG(不是 /srv),讓 Tab 02 訓練專案列表只看到 RAG/ 下的
-    # 真實專案 folder。否則 root=/srv 會把 n8n 其他檔案 / RAG 自己都當成「專案」列。
-    # 開機先 mkdir -p /srv/RAG 確保 FB --root 指得到(splitter 也會建,但兩個容器
-    # 並行啟動時不保證順序)。
-    entrypoint: ["/bin/sh", "-c"]
     command:
-      - 'mkdir -p /srv/RAG && exec /filebrowser --noauth --root=/srv/RAG --address=0.0.0.0 --port=80'
+      - --noauth
+      - --root=/srv/RAG
+      - --address=0.0.0.0
+      - --port=80
+    depends_on:
+      tigerai-splitter:
+        condition: service_healthy
     networks:
       - stack
+    # v1.0.15 2026-05-31: healthcheck via filebrowser /health endpoint.
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
 volumes:

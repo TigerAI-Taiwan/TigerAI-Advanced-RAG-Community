@@ -139,7 +139,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ $json.user_content }}{{ ($('Execute RAG Core').item.json.references_md) ? '\n\n[系統指示:請在你的回答最末,原封不動附上以下「參考來源」區段,連結不可改寫]\n' + $('Execute RAG Core').item.json.references_md : '' }}",
+        "text": "={{ $json.user_content }}{{ ($('Execute RAG Core').item.json.references_md) ? '\\n\\n[系統指示:請在你的回答最末,原封不動附上以下「參考來源」區段,連結不可改寫]\\n' + $('Execute RAG Core').item.json.references_md : '' }}",
         "options": {
           "systemMessage": "={{ $json.system_prompt }}",
           "enableStreaming": true

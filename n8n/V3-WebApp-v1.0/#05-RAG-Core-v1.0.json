@@ -258,7 +258,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 解析 Agent1 的 #1 關鍵字 行,合併前一步字面命中。v1.0.29: 透傳分層 matched_l1/l2/l3。\nconst raw = $json.output || '';\nconst m = raw.match(/#1s*關鍵字s*[:：]s*(.+?)(?:\n|$)/);\nconst fromLLM = m ? m[1].split(/[、,，;；s]+/).map(s => s.trim()).filter(Boolean) : [];\nconst lkm = $('Literal Keyword Match').first().json;\nconst literal = lkm.literal_keywords || [];\nconst kws = [...new Set([...literal, ...fromLLM])];\nreturn [{ json: { keywords: kws, matched_l1: lkm.matched_l1 || [], matched_l2: lkm.matched_l2 || [], matched_l3: lkm.matched_l3 || [] } }];"
+        "jsCode": "// 解析 Agent1 的 #1 關鍵字 行,合併前一步字面命中。v1.0.29: 透傳分層 matched_l1/l2/l3。\nconst raw = $json.output || '';\nconst m = raw.match(/#1\\s*關鍵字\\s*[:：]\\s*(.+?)(?:\\n|$)/);\nconst fromLLM = m ? m[1].split(/[、,，;；\\s]+/).map(s => s.trim()).filter(Boolean) : [];\nconst lkm = $('Literal Keyword Match').first().json;\nconst literal = lkm.literal_keywords || [];\nconst kws = [...new Set([...literal, ...fromLLM])];\nreturn [{ json: { keywords: kws, matched_l1: lkm.matched_l1 || [], matched_l2: lkm.matched_l2 || [], matched_l3: lkm.matched_l3 || [] } }];"
       },
       "id": "n-parse-kw",
       "name": "Parse Keywords",
@@ -438,7 +438,7 @@
             {
               "id": "refmd",
               "name": "references_md",
-              "value": "={{ (() => { const r = (($input.first().json.result) || []); const seen = new Set(); const lines = []; for (const h of r) { const p = h.payload || {}; const key = p.original_file || p.source_file; if (!key || seen.has(key)) continue; seen.add(key); const su = p.source_url, mu = p.md_url; if (!su && !mu) continue; let line = '- ' + key; if (su) line += '：[📄 原始檔](' + su + ')'; if (mu) line += ' ｜ [📝 轉譯MD](' + mu + ')'; lines.push(line); if (lines.length >= 5) break; } return lines.length ? '\n\n---\n**📎 參考來源（可下載）**\n' + lines.join('\n') : ''; })() }}",
+              "value": "={{ (() => { const r = (($input.first().json.result) || []); const seen = new Set(); const lines = []; for (const h of r) { const p = h.payload || {}; const key = p.original_file || p.source_file; if (!key || seen.has(key)) continue; seen.add(key); const su = p.source_url, mu = p.md_url; if (!su && !mu) continue; let line = '- ' + key; if (su) line += '：[📄 原始檔](' + su + ')'; if (mu) line += ' ｜ [📝 轉譯MD](' + mu + ')'; lines.push(line); if (lines.length >= 5) break; } return lines.length ? '\\n\\n---\\n**📎 參考來源（可下載）**\\n' + lines.join('\\n') : ''; })() }}",
               "type": "string"
             }
           ]
@@ -492,7 +492,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// v1.0.29 2026-06-01: 分層字面比對(L1對L1、L2對L2、L3對L3,不混一起)。字典詞出現在問題裡 → 該層命中。\nconst cv = $input.first().json;\nconst q = String(cv.chatInput || '');\nconst matchTier = (str) => [...new Set(String(str || '').split(/[、,，;；s]+/).map(w => w.trim()).filter(w => w && w !== '(無)' && w.length >= 2 && q.includes(w)))];\nconst matched_l1 = matchTier(cv.L1);\nconst matched_l2 = matchTier(cv.L2);\nconst matched_l3 = matchTier(cv.L3);\nconst literal = [...new Set([...matched_l1, ...matched_l2, ...matched_l3])];\nreturn [{ json: { ...cv, literal_hit: literal.length > 0, literal_keywords: literal, matched_l1, matched_l2, matched_l3 } }];"
+        "jsCode": "// v1.0.29: 分層字面比對(L1對L1、L2對L2、L3對L3,不混一起)。字典詞出現在問題裡 → 該層命中。\nconst cv = $input.first().json;\nconst q = String(cv.chatInput || '');\nconst matchTier = (str) => [...new Set(String(str || '').split(/[、,，;；\\s]+/).map(w => w.trim()).filter(w => w && w !== '(無)' && w.length >= 2 && q.includes(w)))];\nconst matched_l1 = matchTier(cv.L1);\nconst matched_l2 = matchTier(cv.L2);\nconst matched_l3 = matchTier(cv.L3);\nconst literal = [...new Set([...matched_l1, ...matched_l2, ...matched_l3])];\nreturn [{ json: { ...cv, literal_hit: literal.length > 0, literal_keywords: literal, matched_l1, matched_l2, matched_l3 } }];"
       },
       "id": "lit-match",
       "name": "Literal Keyword Match",

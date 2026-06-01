@@ -434,6 +434,12 @@
               "name": "sources",
               "value": "={{ (($input.first().json.result) || []).map(h => (h.payload && (h.payload.original_file || h.payload.source_file))).filter(Boolean) }}",
               "type": "array"
+            },
+            {
+              "id": "refmd",
+              "name": "references_md",
+              "value": "={{ (() => { const r = (($input.first().json.result) || []); const seen = new Set(); const lines = []; for (const h of r) { const p = h.payload || {}; const key = p.original_file || p.source_file; if (!key || seen.has(key)) continue; seen.add(key); const su = p.source_url, mu = p.md_url; if (!su && !mu) continue; let line = '- ' + key; if (su) line += '：[📄 原始檔](' + su + ')'; if (mu) line += ' ｜ [📝 轉譯MD](' + mu + ')'; lines.push(line); if (lines.length >= 5) break; } return lines.length ? '\n\n---\n**📎 參考來源（可下載）**\n' + lines.join('\n') : ''; })() }}",
+              "type": "string"
             }
           ]
         },
@@ -583,6 +589,12 @@
               "id": "o-okey",
               "name": "ollama_api_key",
               "value": "={{ $(\"Build Context Vars\").item.json.ollama_api_key }}",
+              "type": "string"
+            },
+            {
+              "id": "refout",
+              "name": "references_md",
+              "value": "={{ $(\"Build RAG Context\").item.json.references_md || '' }}",
               "type": "string"
             }
           ]

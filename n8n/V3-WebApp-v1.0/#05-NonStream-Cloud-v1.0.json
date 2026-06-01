@@ -154,7 +154,7 @@
             {
               "id": "rrr-out",
               "name": "output",
-              "value": "={{ $json.output || '' }}",
+              "value": "={{ ($json.output || '') + ($('Execute RAG Core').item.json.references_md || '') }}",
               "type": "string"
             },
             {
@@ -185,6 +185,12 @@
               "id": "rrr-sid",
               "name": "sessionId",
               "value": "={{ $json.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "refmd",
+              "name": "references_md",
+              "value": "={{ $('Execute RAG Core').item.json.references_md || '' }}",
               "type": "string"
             }
           ]

@@ -155,7 +155,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// v1.4 2026-04-21: 拿掉 require('crypto')（n8n sandbox 擋下），改內嵌 pure-JS SHA-1 + UUID v5\nconst vars = $('Extract Payload').first().json;\nconst NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';\n\nfunction sha1(bytes) {\n  const rotl = (n, x) => ((x << n) | (x >>> (32 - n))) >>> 0;\n  const H = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];\n  const ml = bytes.length * 8;\n  const arr = Array.from(bytes);\n  arr.push(0x80);\n  while ((arr.length % 64) !== 56) arr.push(0);\n  for (let i = 0; i < 4; i++) arr.push(0);\n  for (let i = 3; i >= 0; i--) arr.push((ml >>> (i * 8)) & 0xff);\n  const words = [];\n  for (let i = 0; i < arr.length; i += 4) {\n    words.push(((arr[i] << 24) | (arr[i+1] << 16) | (arr[i+2] << 8) | arr[i+3]) >>> 0);\n  }\n  for (let i = 0; i < words.length; i += 16) {\n    const w = words.slice(i, i + 16);\n    for (let j = 16; j < 80; j++) w[j] = rotl(1, w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16]);\n    let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4];\n    for (let j = 0; j < 80; j++) {\n      let f, k;\n      if (j < 20)      { f = (b & c) | ((~b) & d);      k = 0x5A827999; }\n      else if (j < 40) { f = b ^ c ^ d;                  k = 0x6ED9EBA1; }\n      else if (j < 60) { f = (b & c) | (b & d) | (c & d);k = 0x8F1BBCDC; }\n      else             { f = b ^ c ^ d;                  k = 0xCA62C1D6; }\n      const t = (rotl(5, a) + f + e + k + w[j]) >>> 0;\n      e = d; d = c; c = rotl(30, b); b = a; a = t;\n    }\n    H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0; H[4] = (H[4] + e) >>> 0;\n  }\n  const out = new Uint8Array(20);\n  for (let i = 0; i < 5; i++) {\n    out[i*4]   = (H[i] >>> 24) & 0xff;\n    out[i*4+1] = (H[i] >>> 16) & 0xff;\n    out[i*4+2] = (H[i] >>> 8)  & 0xff;\n    out[i*4+3] =  H[i]         & 0xff;\n  }\n  return out;\n}\n\nfunction uuidV5(name, namespace) {\n  const hex = namespace.replace(/-/g, '');\n  const nsBytes = new Uint8Array(16);\n  for (let i = 0; i < 16; i++) nsBytes[i] = parseInt(hex.substr(i*2, 2), 16);\n  const nameBytes = new TextEncoder().encode(name);\n  const msg = new Uint8Array(nsBytes.length + nameBytes.length);\n  msg.set(nsBytes, 0);\n  msg.set(nameBytes, nsBytes.length);\n  const digest = sha1(msg);\n  digest[6] = (digest[6] & 0x0f) | 0x50;\n  digest[8] = (digest[8] & 0x3f) | 0x80;\n  const h = Array.from(digest.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join('');\n  return `${h.substring(0,8)}-${h.substring(8,12)}-${h.substring(12,16)}-${h.substring(16,20)}-${h.substring(20,32)}`;\n}\n\nconst out = [];\nfor (const fileItem of $input.all()) {\n  let chunks;\n  if (Array.isArray(fileItem.json)) chunks = fileItem.json;\n  else if (Array.isArray(fileItem.json.data)) chunks = fileItem.json.data;\n  else if (fileItem.json.text) chunks = [fileItem.json];\n  else continue;\n\n  const firstMetadata = chunks[0]?.metadata || {};\n  const sourceFile = firstMetadata.source_file || fileItem.json.file_name || 'unknown';\n  const originalFile = sourceFile.replace(/\\.(md|markdown)$/i, '.pdf');\n\n  const createDate = new Date().toISOString().slice(0, 10); // yyyy-MM-dd (UTC)\n  chunks.forEach((chunk, idx) => {\n    const pointId = uuidV5(`${originalFile}#${idx}`, NAMESPACE);\n    const payload = {\n      text: chunk.text || '',\n      original_file: originalFile,\n      source_file: sourceFile,\n      file_name: originalFile,      // v1.6 2026-04-21: 前代 相容欄位名\n      chunk_index: idx,\n      project_name: vars.project_name,\n      // v1.0.28 2026-06-01: 灌庫時把原始 PDF + 轉譯 MD 的下載 URL 寫進 payload,查詢命中可附下載連結\n      source_url: (vars.public_url ? vars.public_url.replace(//+$/, '') + '/backend/dl?p=' + encodeURIComponent(vars.project_name || '') + '&f=' + encodeURIComponent(originalFile) : ''),\n      md_url: (vars.public_url ? vars.public_url.replace(//+$/, '') + '/backend/dl-chunk?p=' + encodeURIComponent(vars.project_name || '') + '&f=' + encodeURIComponent(sourceFile) + '&i=' + idx : ''),\n      create_date: createDate,      // v1.6 2026-04-21: 建立日期（對應 前代 $now.format('yyyy-MM-dd')）\n      ...(chunk.metadata || {}),\n      tags: chunk.tags || [],\n      suggested_questions: chunk.suggested_questions || []\n    };\n    out.push({\n      json: {\n        point_id: pointId,\n        text_to_embed: chunk.text || '',\n        qdrant_payload: payload,\n        chars: (chunk.text || '').length\n      }\n    });\n  });\n}\n\nreturn out;"
+        "jsCode": "// v1.4 2026-04-21: 拿掉 require('crypto')（n8n sandbox 擋下），改內嵌 pure-JS SHA-1 + UUID v5\nconst vars = $('Extract Payload').first().json;\nconst NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';\n\nfunction sha1(bytes) {\n  const rotl = (n, x) => ((x << n) | (x >>> (32 - n))) >>> 0;\n  const H = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];\n  const ml = bytes.length * 8;\n  const arr = Array.from(bytes);\n  arr.push(0x80);\n  while ((arr.length % 64) !== 56) arr.push(0);\n  for (let i = 0; i < 4; i++) arr.push(0);\n  for (let i = 3; i >= 0; i--) arr.push((ml >>> (i * 8)) & 0xff);\n  const words = [];\n  for (let i = 0; i < arr.length; i += 4) {\n    words.push(((arr[i] << 24) | (arr[i+1] << 16) | (arr[i+2] << 8) | arr[i+3]) >>> 0);\n  }\n  for (let i = 0; i < words.length; i += 16) {\n    const w = words.slice(i, i + 16);\n    for (let j = 16; j < 80; j++) w[j] = rotl(1, w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16]);\n    let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4];\n    for (let j = 0; j < 80; j++) {\n      let f, k;\n      if (j < 20)      { f = (b & c) | ((~b) & d);      k = 0x5A827999; }\n      else if (j < 40) { f = b ^ c ^ d;                  k = 0x6ED9EBA1; }\n      else if (j < 60) { f = (b & c) | (b & d) | (c & d);k = 0x8F1BBCDC; }\n      else             { f = b ^ c ^ d;                  k = 0xCA62C1D6; }\n      const t = (rotl(5, a) + f + e + k + w[j]) >>> 0;\n      e = d; d = c; c = rotl(30, b); b = a; a = t;\n    }\n    H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0; H[4] = (H[4] + e) >>> 0;\n  }\n  const out = new Uint8Array(20);\n  for (let i = 0; i < 5; i++) {\n    out[i*4]   = (H[i] >>> 24) & 0xff;\n    out[i*4+1] = (H[i] >>> 16) & 0xff;\n    out[i*4+2] = (H[i] >>> 8)  & 0xff;\n    out[i*4+3] =  H[i]         & 0xff;\n  }\n  return out;\n}\n\nfunction uuidV5(name, namespace) {\n  const hex = namespace.replace(/-/g, '');\n  const nsBytes = new Uint8Array(16);\n  for (let i = 0; i < 16; i++) nsBytes[i] = parseInt(hex.substr(i*2, 2), 16);\n  const nameBytes = new TextEncoder().encode(name);\n  const msg = new Uint8Array(nsBytes.length + nameBytes.length);\n  msg.set(nsBytes, 0);\n  msg.set(nameBytes, nsBytes.length);\n  const digest = sha1(msg);\n  digest[6] = (digest[6] & 0x0f) | 0x50;\n  digest[8] = (digest[8] & 0x3f) | 0x80;\n  const h = Array.from(digest.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join('');\n  return `${h.substring(0,8)}-${h.substring(8,12)}-${h.substring(12,16)}-${h.substring(16,20)}-${h.substring(20,32)}`;\n}\n\nconst out = [];\n// v1.0.29 2026-06-01: 取字典 L1/L2/L3,把每個 chunk 的 tags 分層(分層比對更準,不混一起)\nconst _H = (() => { try { return $('Fetch Hierarchy').first().json || {}; } catch(e){ return {}; } })();\nconst L1set = new Set((_H.l1 || []).map(s => String(s).trim()));\nconst L2set = new Set((_H.l2 || []).map(s => String(s).trim()));\nconst L3set = new Set((_H.l3 || []).map(s => String(s).trim()));\nfor (const fileItem of $input.all()) {\n  let chunks;\n  if (Array.isArray(fileItem.json)) chunks = fileItem.json;\n  else if (Array.isArray(fileItem.json.data)) chunks = fileItem.json.data;\n  else if (fileItem.json.text) chunks = [fileItem.json];\n  else continue;\n\n  const firstMetadata = chunks[0]?.metadata || {};\n  const sourceFile = firstMetadata.source_file || fileItem.json.file_name || 'unknown';\n  const originalFile = sourceFile.replace(/\\.(md|markdown)$/i, '.pdf');\n\n  const createDate = new Date().toISOString().slice(0, 10); // yyyy-MM-dd (UTC)\n  chunks.forEach((chunk, idx) => {\n    const pointId = uuidV5(`${originalFile}#${idx}`, NAMESPACE);\n    const payload = {\n      text: chunk.text || '',\n      original_file: originalFile,\n      source_file: sourceFile,\n      file_name: originalFile,      // v1.6 2026-04-21: 前代 相容欄位名\n      chunk_index: idx,\n      project_name: vars.project_name,\n      // v1.0.28 2026-06-01: 灌庫時把原始 PDF + 轉譯 MD 的下載 URL 寫進 payload,查詢命中可附下載連結\n      source_url: (vars.public_url ? vars.public_url.replace(//+$/, '') + '/backend/dl?p=' + encodeURIComponent(vars.project_name || '') + '&f=' + encodeURIComponent(originalFile) : ''),\n      md_url: (vars.public_url ? vars.public_url.replace(//+$/, '') + '/backend/dl-chunk?p=' + encodeURIComponent(vars.project_name || '') + '&f=' + encodeURIComponent(sourceFile) + '&i=' + idx : ''),\n      create_date: createDate,      // v1.6 2026-04-21: 建立日期（對應 前代 $now.format('yyyy-MM-dd')）\n      ...(chunk.metadata || {}),\n      tags: chunk.tags || [],\n      // v1.0.29: 用字典把 tags 對應分層,存進 payload 供查詢時 L1對L1/L2對L2/L3對L3 比對\n      level1: (chunk.tags || []).map(t => String(t).trim()).filter(t => L1set.has(t)),\n      level2: (chunk.tags || []).map(t => String(t).trim()).filter(t => L2set.has(t)),\n      level3: (chunk.tags || []).map(t => String(t).trim()).filter(t => L3set.has(t)),\n      suggested_questions: chunk.suggested_questions || []\n    };\n    out.push({\n      json: {\n        point_id: pointId,\n        text_to_embed: chunk.text || '',\n        qdrant_payload: payload,\n        chars: (chunk.text || '').length\n      }\n    });\n  });\n}\n\nreturn out;"
       },
       "id": "n-build-points",
       "name": "Build Point IDs + Payloads",
@@ -431,6 +431,22 @@
         -540,
         80
       ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Extract Payload').item.json.backend_url }}/keywords/hierarchy?collection_name={{ encodeURIComponent($('Extract Payload').item.json.collection_name || '') }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "n-fetch-hier",
+      "name": "Fetch Hierarchy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        440
+      ]
     }
   ],
   "connections": {
@@ -449,7 +465,7 @@
       "main": [
         [
           {
-            "node": "Read JSON Files",
+            "node": "Fetch Hierarchy",
             "type": "main",
             "index": 0
           }
@@ -574,6 +590,17 @@
         [
           {
             "node": "Callback to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Hierarchy": {
+      "main": [
+        [
+          {
+            "node": "Read JSON Files",
             "type": "main",
             "index": 0
           }

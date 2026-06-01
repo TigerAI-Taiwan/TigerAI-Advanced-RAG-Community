@@ -258,7 +258,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 解析 Agent1 的 #1 關鍵字 行，並合併前一步程式確定的字面命中\nconst raw = $json.output || '';\nconst m = raw.match(/#1\\s*關鍵字\\s*[:：]\\s*(.+?)(?:\\n|$)/);\nconst fromLLM = m ? m[1].split(/[、,，;；\\s]+/).map(s => s.trim()).filter(Boolean) : [];\nconst literal = $('Literal Keyword Match').first().json.literal_keywords || [];\nconst kws = [...new Set([...literal, ...fromLLM])];\nreturn [{ json: { keywords: kws } }];"
+        "jsCode": "// 解析 Agent1 的 #1 關鍵字 行,合併前一步字面命中。v1.0.29: 透傳分層 matched_l1/l2/l3。\nconst raw = $json.output || '';\nconst m = raw.match(/#1s*關鍵字s*[:：]s*(.+?)(?:\n|$)/);\nconst fromLLM = m ? m[1].split(/[、,，;；s]+/).map(s => s.trim()).filter(Boolean) : [];\nconst lkm = $('Literal Keyword Match').first().json;\nconst literal = lkm.literal_keywords || [];\nconst kws = [...new Set([...literal, ...fromLLM])];\nreturn [{ json: { keywords: kws, matched_l1: lkm.matched_l1 || [], matched_l2: lkm.matched_l2 || [], matched_l3: lkm.matched_l3 || [] } }];"
       },
       "id": "n-parse-kw",
       "name": "Parse Keywords",
@@ -304,7 +304,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 組 Qdrant search body：keywords OR filter 跨多欄（TigerAI 攤平 payload）\nconst kws = $('Parse Keywords').first().json.keywords || [];\nconst embedResp = $input.first().json;\nlet vector = null;\nif (embedResp.data && Array.isArray(embedResp.data) && embedResp.data[0]?.embedding) vector = embedResp.data[0].embedding;\nelse if (embedResp.embedding) vector = embedResp.embedding;\nelse if (embedResp.embeddings) vector = Array.isArray(embedResp.embeddings[0]) ? embedResp.embeddings[0] : embedResp.embeddings;\nif (!vector) throw new Error('Embed 沒回 vector: ' + JSON.stringify(embedResp).substring(0,200));\nconst body = { vector, limit: 5, with_payload: true, with_vector: false };\nif (kws.length) {\n  const fields = ['tags','keywords','level1','level2','level3','metadata_tags','category','subcategory'];\n  const should = [];\n  for (const f of fields) { should.push({ key: f, match: { any: kws } }); for (const kw of kws) should.push({ key: f, match: { value: kw } }); }\n  body.filter = { should };\n}\nreturn [{ json: { qdrant_body: body, collection: $('Build Context Vars').item.json.collection_name } }];"
+        "jsCode": "// 組 Qdrant search body。v1.0.29: 分層比對 — L1↔payload.level1、L2↔level2、L3↔level3(各層獨立),\n// 不再把全部關鍵字混在一起比所有欄位(避免 L3 詞誤命中 L1 欄位的跨層雜訊)。\nconst pk = $('Parse Keywords').first().json;\nconst kws = pk.keywords || [];\nconst m1 = pk.matched_l1 || [], m2 = pk.matched_l2 || [], m3 = pk.matched_l3 || [];\nconst embedResp = $input.first().json;\nlet vector = null;\nif (embedResp.data && Array.isArray(embedResp.data) && embedResp.data[0]?.embedding) vector = embedResp.data[0].embedding;\nelse if (embedResp.embedding) vector = embedResp.embedding;\nelse if (embedResp.embeddings) vector = Array.isArray(embedResp.embeddings[0]) ? embedResp.embeddings[0] : embedResp.embeddings;\nif (!vector) throw new Error('Embed 沒回 vector: ' + JSON.stringify(embedResp).substring(0, 200));\nconst body = { vector, limit: 15, with_payload: true, with_vector: false };\nconst should = [];\nif (m1.length) should.push({ key: 'level1', match: { any: m1 } });\nif (m2.length) should.push({ key: 'level2', match: { any: m2 } });\nif (m3.length) should.push({ key: 'level3', match: { any: m3 } });\n// 相容退路:分層皆無命中但有扁平關鍵字(舊 chunk 沒分層 metadata)→ 退回跨欄比對\nif (!should.length && kws.length) {\n  ['tags', 'keywords', 'level1', 'level2', 'level3', 'metadata_tags'].forEach(fld => should.push({ key: fld, match: { any: kws } }));\n}\nif (should.length) body.filter = { should };\nreturn [{ json: { qdrant_body: body, collection: $('Build Context Vars').item.json.collection_name } }];"
       },
       "id": "n-build-q",
       "name": "Build Qdrant Body",
@@ -399,7 +399,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"vector\": {{ JSON.stringify($('Build Qdrant Body').item.json.qdrant_body.vector) }},\n  \"limit\": 5,\n  \"with_payload\": true,\n  \"with_vector\": false\n}",
+        "jsonBody": "={\n  \"vector\": {{ JSON.stringify($('Build Qdrant Body').item.json.qdrant_body.vector) }},\n  \"limit\": 15,\n  \"with_payload\": true,\n  \"with_vector\": false\n}",
         "options": {
           "timeout": 30000
         }
@@ -492,7 +492,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 確定性「字面」關鍵字比對(子字串)。字典詞真的出現在問題裡 → literal_hit,直接認定命中(不靠 LLM)。\nconst cv = $input.first().json;\nconst q = String(cv.chatInput || '');\nconst dict = [];\n['L1', 'L2', 'L3'].forEach(k => { String(cv[k] || '').split(/[、,，;；\\s]+/).forEach(w => { w = w.trim(); if (w && w !== '(無)') dict.push(w); }); });\nconst literal = [...new Set(dict.filter(w => w.length >= 2 && q.includes(w)))];\nreturn [{ json: { ...cv, literal_hit: literal.length > 0, literal_keywords: literal } }];"
+        "jsCode": "// v1.0.29 2026-06-01: 分層字面比對(L1對L1、L2對L2、L3對L3,不混一起)。字典詞出現在問題裡 → 該層命中。\nconst cv = $input.first().json;\nconst q = String(cv.chatInput || '');\nconst matchTier = (str) => [...new Set(String(str || '').split(/[、,，;；s]+/).map(w => w.trim()).filter(w => w && w !== '(無)' && w.length >= 2 && q.includes(w)))];\nconst matched_l1 = matchTier(cv.L1);\nconst matched_l2 = matchTier(cv.L2);\nconst matched_l3 = matchTier(cv.L3);\nconst literal = [...new Set([...matched_l1, ...matched_l2, ...matched_l3])];\nreturn [{ json: { ...cv, literal_hit: literal.length > 0, literal_keywords: literal, matched_l1, matched_l2, matched_l3 } }];"
       },
       "id": "lit-match",
       "name": "Literal Keyword Match",
@@ -672,6 +672,19 @@
         -560,
         -300
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1.0.29 2026-06-01: 自家加權重排(無 rerank 模型,Community 免費)。\n// L3命中×3 + L2命中×2 + L1命中×1 → 深層精準命中排前面;同分再看 Qdrant 向量分數。取前 5。\nconst hits = ($input.first().json.result) || [];\nconst pk = $('Parse Keywords').first().json;\nconst toSet = a => new Set((a || []).map(s => String(s).trim()));\nconst m1 = toSet(pk.matched_l1), m2 = toSet(pk.matched_l2), m3 = toSet(pk.matched_l3);\nconst arrOf = v => Array.isArray(v) ? v : (v == null ? [] : [v]);\nconst scored = hits.map((h, idx) => {\n  const p = h.payload || {};\n  const s1 = arrOf(p.level1).map(x => String(x).trim()).filter(x => m1.has(x)).length;\n  const s2 = arrOf(p.level2).map(x => String(x).trim()).filter(x => m2.has(x)).length;\n  const s3 = arrOf(p.level3).map(x => String(x).trim()).filter(x => m3.has(x)).length;\n  return { h, tierScore: s3 * 3 + s2 * 2 + s1 * 1, idx, vscore: (typeof h.score === 'number' ? h.score : 0) };\n});\nscored.sort((a, b) => (b.tierScore - a.tierScore) || (b.vscore - a.vscore) || (a.idx - b.idx));\nreturn [{ json: { result: scored.slice(0, 5).map(x => x.h) } }];"
+      },
+      "id": "n-rerank",
+      "name": "Rerank by Tier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1648,
+        320
+      ]
     }
   ],
   "connections": {
@@ -829,7 +842,7 @@
       "main": [
         [
           {
-            "node": "Build RAG Context",
+            "node": "Rerank by Tier",
             "type": "main",
             "index": 0
           }
@@ -847,7 +860,7 @@
       "main": [
         [
           {
-            "node": "Build RAG Context",
+            "node": "Rerank by Tier",
             "type": "main",
             "index": 0
           }
@@ -870,6 +883,17 @@
         [
           {
             "node": "Core Output (RAG)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rerank by Tier": {
+      "main": [
+        [
+          {
+            "node": "Build RAG Context",
             "type": "main",
             "index": 0
           }

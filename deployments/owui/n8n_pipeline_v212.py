@@ -129,6 +129,14 @@ class Pipe:
             default="",
             description="(Optional override) Qdrant collection. Normally leave empty and use app_name; the backend resolves the collection from the app config.",
         )
+        # v1.0.27 2026-06-01: backend_url valve. Backend (createOwuiPipeline) writes this into the
+        # pipe's valves so the query payload carries it to n8n. Without declaring it here, OWUI's
+        # Pydantic Valves model silently DROPS the field → n8n gets no backend_url → #05-RAG-Core
+        # fail-loud "Invalid URL". MUST be declared + forwarded in the payload below.
+        backend_url: str = Field(
+            default="",
+            description="Internal URL n8n uses to call back the TigerAI backend (e.g., http://tigerai-backend:3060). Auto-filled by the backend when it creates this pipe; leave as-is.",
+        )
         emit_interval: float = Field(
             default=2.0, description="Interval in seconds between status emissions"
         )
@@ -561,6 +569,9 @@ class Pipe:
                 payload["app_name"] = self.valves.app_name
             if self.valves.collection_name:  # optional explicit override
                 payload["collection_name"] = self.valves.collection_name
+            # v1.0.27: forward backend_url so #05-RAG-Core can Fetch Backend Config (fail-loud if missing)
+            if self.valves.backend_url:
+                payload["backend_url"] = self.valves.backend_url
             if session_context:
                 payload["context"] = session_context
 

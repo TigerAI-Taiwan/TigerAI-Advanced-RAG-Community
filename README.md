@@ -61,6 +61,23 @@ Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover th
 > - `SETTINGS_SECRET` / `TRANSIT_SECRET` — **MUST** be set to strong random strings in production (`openssl rand -hex 32`); leaving them blank works for local dev only — backend will auto-generate per-restart values that break multi-instance and persist nothing.
 > - `PG_PASSWORD` / `FB_PASSWORD` — defaults are for local dev only; **change in production** (FileBrowser enforces ≥12 chars).
 
+## 📚 安裝 AI 必讀文件 (Install AI: read these, in order)
+
+如果你是被指派來安裝這個專案的 AI agent(Claude Code / Antigravity / Gemini / Codex…),**按以下順序讀這些文件**,不要只看 README 就動手:
+
+| # | 文件 | 為什麼要讀 | 一句話重點 |
+|---|---|---|---|
+| 1 | **[AGENTS.md](AGENTS.md)** | 安裝入口、兩階段 check-first 流程 | 先 `--check-only` dry-run 再實裝;只跟人要「無法用 API 拿到的密鑰」 |
+| 2 | **[STACK-REFERENCE.md](STACK-REFERENCE.md)** §4 | **強制 probe SOP** | ⚠️ **絕不可套預設值寫 .env** — 每台 OpenGenie 部署的 container 名 / network / 帳密都不同,必須 `docker ps` + `docker network inspect` 拿真實值 |
+| 3 | **[INSTALL.md](INSTALL.md)** | 逐步 runbook | RAG/ 目錄自動處理、allowed_formats、port 衝突等細節 |
+| 4 | **[LESSONS_LEARNED.md](LESSONS_LEARNED.md)** | 踩過的坑 + 修法 | fresh install 必中的 bug 全記在這(v1.0.10-25),含 n8n API key 必須含 `credentials:read`、Cloud AI 別用 reasoning model 等 |
+| 5 | **[.env.example](.env.example)** | 設定欄位參考 | 每個 env 的用途 + 哪些是必填 / 哪些有安全警告 |
+
+**最容易踩的 3 個雷(全寫在上面文件裡,這裡先警告):**
+1. **不要套 STACK-REFERENCE 的預設容器名** — 你的機器可能是 `open-webui`(非 `openwebui-main`)、`docling-serve`(非 `docling`)、某些 service 不在同一個 network。必須 probe。
+2. **n8n API key 必須含 `credentials:read` 權限** — 否則 OpenAI 憑證綁不上、workflow 無法 active(deploy 會 fail-stop 提醒你)。
+3. **Cloud AI model 用 `gpt-4o-mini` 類標準模型** — 別用 `o1` / `gpt-5.x` reasoning model(參數限制如不接 `temperature` / `max_tokens` 會讓訓練 chain 失敗)。
+
 ## Editions
 
 | | **Community** (this repo) | **Pro / Enterprise** |

@@ -681,7 +681,7 @@ def main() -> int:
     print("=" * 60)
     cred_check_ok = True
     try:
-        cred_list_raw = api_get(base_url, "/credentials", api_key)
+        cred_list_raw = api_get(base_url, "/api/v1/credentials", api_key)  # v1.0.26 fix: 補 /api/v1(漏了會 404,cred-check/rewire 全失效)
         cred_list = cred_list_raw.get("data", cred_list_raw) if isinstance(cred_list_raw, dict) else cred_list_raw
         if not isinstance(cred_list, list): cred_list = []
         types_present = sorted({c.get("type") for c in cred_list if c.get("type")})
@@ -832,7 +832,7 @@ def main() -> int:
     if not args.skip_cred_rewire:
         print("Credential rewire pass (match by type + name) ...")
         try:
-            cred_list_raw = api_get(base_url, "/credentials", api_key)
+            cred_list_raw = api_get(base_url, "/api/v1/credentials", api_key)  # v1.0.26 fix: 補 /api/v1(漏了會 404,cred-check/rewire 全失效)
             # n8n returns either a list or {data: [...]}
             cred_list = cred_list_raw.get("data", cred_list_raw) if isinstance(cred_list_raw, dict) else cred_list_raw
             if not isinstance(cred_list, list):

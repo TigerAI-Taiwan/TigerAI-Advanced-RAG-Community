@@ -53,6 +53,81 @@
 - **果**:RAG 查詢全死
 - **修**:JSON 內 `\n` → `\\n`(decode 後變 JS escape sequence,engine 正常解析)
 
+### v1.0.18 — PG_SCHEMA / WEBHOOK_PREFIX env 化 + deploy [Community] 前綴
+- SCHEMA 寫死 `tigerai_webapp` → 同 PG 跑多 edition settings/projects 互相污染。改 `process.env.PG_SCHEMA`。
+- wh_step1-5 支援 `WEBHOOK_PREFIX` → `/webhook/tigerai-{edition}-stepN`(同 n8n 多 edition 不撞)。
+- deploy_n8n.py 加 `--edition` → workflow.name 加 `[Community]` 前綴(n8n UI 一眼分辨)。
+
+### v1.0.19 — SETTINGS_SECRET plaintext → Invalid key length(每台新機必中 🔴)
+- `encryptValue` 寫死 `Buffer.from(SETTINGS_SECRET,'hex')` 要 64 字 hex,.env 給 plaintext 就 throw → **存任何設定全 500**。
+- **修**:`_deriveSettingsKey()` 看 64-hex 維持舊行為(相容既有 ciphertext),否則 SHA256 derive 接受任意 plaintext。
+
+### v1.0.20 — crash recovery + healthcheck
+- backend 在 rule 生成中 / 專案訓練中重啟 → status 卡 `generating` / `進行中` → re-entry guard 409 永久鎖死。啟動時自動重設。
+- splitter image(python:slim)**沒 wget** → wget healthcheck 永遠 unhealthy + 卡 depends_on:service_healthy 的 filebrowser。改 python urllib;nginx/backend `--spider`→`-O /dev/null`。
+
+### v1.0.21 — deploy edition-prefix 2 bug(獨立 n8n 實測挖出)
+- patch_edition_prefix 沒同步改 executeWorkflow 的 `cachedResultName` → rewire 用 cachedResultName 對不上 → `__REWIRE_BY_NAME__` 沒被替換 → activate 失敗。
+- activation 順序錯(sub-workflow 要先 active 父才能 active)→ 改**多趟重試 leaves-first auto-resolve**。
+
+### v1.0.22 — #02/#03 訓練 chain 2 bug(端到端實測)
+- #02/#03 Build LLM Input 沒把 `cloud_ai_key`/`cloud_ai_url` 傳進 Sub-Chat-Cloud → Cloud AI Chat 401「no API key」→ 訓練死在 Step2。補 5 欄位。
+- #03 Parse QA JSON 漏讀 `r.output`(Sub-Chat-Cloud 回 {output})→ Unknown error。#02 有處理 output、#03 漏。
+
+### v1.0.23 — 完成報告改放專案根目錄
+- 報告 + keywords.csv 從 Step4-JSON2VectorDB 子目錄 → 專案根(000- 前綴排最前,打開即見)。
+
+### v1.0.24 — RAG Rule 欄子資料夾顯示「—」
+- Step* 管線子資料夾沒自己的 rule_id → UI 誤顯「未指定」。只有 root 層專案顯示規則,子資料夾顯「—」。
+
+### v1.0.25 — 訓練完成「已完成→倒退」race
+- #04 灌庫對每 chunk 送 1 callback(5 chunks → 5 callback)。第 1 個正確設「已完成」,後續重複 callback 走 else 分支用 body.status(="Step 43 進行中")覆寫 → 倒退,專案永遠卡。終態(已完成/失敗)重複 callback 直接忽略。
+
+### v1.0.26 — deploy cred endpoint 漏 /api/v1(Gemini 遠端發現)
+- `api_get(base_url,"/credentials")` 漏 /api/v1(其他 workflow endpoint 都有)→ cred-check/rewire 必 404。
+
+### v1.0.27 — OWUI valves 漏 backend_url + OWUI pipeline 沒宣告 valve
+- backend createOwuiPipeline 設 valves 漏 backend_url → #05-RAG-Core query「Invalid URL」。補送。
+- (接力)OWUI pipeline 腳本 Valves class **沒宣告 backend_url** → OWUI Pydantic 收到丟棄 → n8n 還是沒。兩個 .py 加 backend_url Field + payload 帶上(v1.0.29 補)。
+
+### v1.0.28 — RAG 答案附下載連結(原始 PDF + 命中 chunk 切片)
+- Step4 灌庫時把 `source_url`(/dl 整份 PDF)+ `md_url`(/dl-chunk 命中切片,帶 &i=idx)寫進 chunk payload;查詢命中 #05 組 references_md 附答案末。
+- splitter /resolve 加搜 Step1-File2MD/Step2-MD2JSON;backend 加 GET /dl-chunk 即時從 Step2 JSON 取第 i 片回小 .md。
+
+### v1.0.29 — L1/L2/L3 分層比對 + 自家加權重排
+- 舊版 L1+L2+L3 全混一袋比所有欄位(跨層雜訊)。改:#04 用字典把 chunk tags 對應 level1/2/3 存 payload;#05 分層命中(matched_l1/l2/l3)→ Build Qdrant Body 分層 filter(level1↔matched_l1...)。
+- Rerank by Tier code 節點(**無 rerank 模型**,純算術):L3命中×3+L2×2+L1×1,撈 15 候選 → 算分取前 5。
+- ⚠️ **依賴關鍵字字典(Tab 03)有 L1/L2/L3 階層**:chunk tags 要對得到字典層級,level1/2/3 才有值。字典空 → 分層無效果,自動退回扁平比對。
+
+### v1.0.30 — #04 fileSelector 被插入節點打斷 + 假成功偵測
+- v1.0.29 插 Fetch Hierarchy 在 Extract Payload 跟 Read JSON 中間,fileSelector 用 `$json.folder_id`(當前輸入)→ 變 Fetch Hierarchy 回應(無 folder_id)→ 讀 0 檔。改顯式 `$('Extract Payload')`。
+- **假成功偵測**:Step4 callback chunk_count===0 → 標「已完成(⚠️灌庫0筆)」+ debug_logs error,不再 silent 成功。
+- (同版)#04/#05 注入 code 的 regex `\s`/`\n` 被 heredoc 吃掉 → 語法錯/字串跨行壞。改用 Write 工具精確跳脫。
+
+### v1.0.31 — #05 Fetch L1/L2/L3 Keywords backend_url 被前節點洗掉(Gemini 遠端,全體 query 必中)
+- n8n HTTP 節點執行後用「回應」覆蓋 $json。第 1 個 Fetch Backend Config 用 `$json.backend_url`(此時 $json=入口資料,有值)→ OK;第 2 個 Fetch L1/L2/L3 Keywords 用 `$json.backend_url`(此時 $json=第1個回應,無 backend_url)→ 空 → URL 少 host → Invalid URL。
+- pre-existing bug:之前 backend_url 一直空(OWUI valve 沒宣告)沒暴露,流進來才現形。
+- **修**:第 2 個改用源頭 `$('When Called').item.json.backend_url`(#05-RAG-Core 入口節點,不被洗)。注意非 `$('Prep Core Input')`(那在 #05-NonStream)。
+
+---
+
+## 1b. 2026-06-02 本機 community-test 驗證紀錄(v1.0.28-31 新功能)
+
+**測試環境**:`c:/Tools/tigerai-community-test`(獨立 n8n-community + PG_SCHEMA=tigerai_community + 接共用 OpenGenie)。
+
+**驗證方式 & 結果:**
+- 完整訓練 chain 有**間歇性卡頓**(接共用基礎設施 + 多次 backend 重啟造成狀態不一致,非功能 bug)→ 改用**直接觸發 #04** 繞過 flaky chain 驗證功能。
+- ✅ **下載連結**:直接觸發 #04 → Build Point IDs 產 10 chunk payload,`source_url=.../backend/dl?p=&f=Laborlaw.pdf`、`md_url=.../backend/dl-chunk?p=&f=Laborlaw.md&i=0`;curl /dl-chunk 回傳「命中片段 #0」小切片(HTTP 200)、/dl 回 302 跳轉下載 PDF。**功能實測通。**
+- ✅ **#04 fileSelector + regex 修**:Read JSON 讀到檔、Build Point IDs 語法 valid 建 10 payload。
+- ⚠️ **L1/L2/L3 level1/2/3 全空**:機制跑通無錯,但 chunk tags(勞動條件/保障權益/最低標準)對不到字典 → 空。**分層效果被「字典要先建 L1/L2/L3 階層」gate 住**(符合 AI 只建議、人核對才入字典的設計)。
+
+**關鍵教訓:**
+1. **heredoc 寫 n8n jsCode/expression 的 regex 會吃掉 `\s`/`\n` 跳脫** → 語法錯。改用 Write 工具寫 patch script(精確保留),且每個 code 節點用 `new Function(jsCode)` 驗語法、expression 檢查有沒有混入真換行。
+2. **n8n HTTP 節點會用回應覆蓋 $json** → 後續節點要拿前面的欄位必須用源頭 `$('SourceNode').item.json.x`,不能用 `$json.x`。
+3. **插入節點到主鏈會打斷下游 `$json` 引用** → 下游改用顯式 `$('UpstreamNode')` 才安全。
+4. **「假成功」是最難抓的** → 各步驟 callback 帶數量,backend 驗產出>0 否則標警告(v1.0.30 做了 Step4)。
+5. L1/L2/L3 分層比對的**效果前提是字典先建好階層**;空字典時自動退回扁平,不會壞但也沒提升。
+
 ---
 
 ## 2. 三層系統架構認知

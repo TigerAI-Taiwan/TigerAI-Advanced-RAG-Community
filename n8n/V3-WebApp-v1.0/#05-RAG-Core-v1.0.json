@@ -30,7 +30,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.backend_url || (() => { throw new Error('backend_url missing from RAG-Core payload (caller must pass it via Prep Core Input)'); })() }}/keywords/hierarchy?collection_name={{ encodeURIComponent($json.collection_name || '') }}",
+        "url": "={{ $('When Called').item.json.backend_url || (() => { throw new Error('backend_url missing from RAG-Core payload (caller must pass it)'); })() }}/keywords/hierarchy?collection_name={{ encodeURIComponent($json.collection_name || '') }}",
         "options": {
           "timeout": 10000
         }

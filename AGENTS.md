@@ -13,9 +13,13 @@ Your job: deploy OpenGenie first, then deploy this app and connect it to OpenGen
 
 ```bash
 # Phase 1: clone + start containers
-git clone --branch v1.0.8 https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community.git
+# v1.0.25 (2026-06-01): 用 latest(或最新 tag),不要 pin 舊版。舊版有 fresh-install 必中的 bug
+# (SETTINGS_SECRET 崩潰、OWUI key 不讀 DB、訓練 chain cloud_ai_key/output 缺、完成狀態倒退 race…)
+# 全在 v1.0.16-25 修掉。
+git clone https://github.com/TigerAI-Taiwan/TigerAI-Advanced-RAG-Community.git
 cd TigerAI-Advanced-RAG-Community
-cp .env.example .env && vim .env   # optional — defaults work for OpenGenie canonical names
+cp .env.example .env && vim .env   # 依 STACK-REFERENCE.md §4 probe SOP 填(別套預設值!)
+docker compose pull                # 確保拉到 latest image(含全部修復)
 docker compose up -d
 
 # Phase 2: set env + RUN CHECKS FIRST (no install, just diagnose)

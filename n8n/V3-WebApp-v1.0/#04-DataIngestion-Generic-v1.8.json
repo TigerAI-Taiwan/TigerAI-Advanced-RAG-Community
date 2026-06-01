@@ -127,7 +127,7 @@
     },
     {
       "parameters": {
-        "fileSelector": "=/home/node/.n8n-files/RAG/{{ $json.folder_id }}/Step2-MD2JSON/*.json",
+        "fileSelector": "=/home/node/.n8n-files/RAG/{{ $('Extract Payload').first().json.folder_id }}/Step2-MD2JSON/*.json",
         "options": {}
       },
       "id": "n-read",

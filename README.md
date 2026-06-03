@@ -2,14 +2,14 @@
 
 <img src="assets/brand.png" width="92" alt="TigerAI logo">
 
-# TigerAI Advanced RAG — Community Edition
+# TigerAI Advanced RAG Community
 
 **Turn your documents into a cited, ask-anything knowledge base.**
 An open-source RAG platform — and the **reference application** for the
 [OpenGenie AI Stack](https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack).
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-0969da)](LICENSE)
-[![Edition](https://img.shields.io/badge/edition-Community%20(free)-1a7f37)](#editions)
+[![Edition](https://img.shields.io/badge/version-Community%20(free)-1a7f37)](#editions)
 [![Arch](https://img.shields.io/badge/image-amd64%20%7C%20arm64-555)](#quick-start)
 [![Reference app](https://img.shields.io/badge/reference%20app%20for-OpenGenie%20AI%20Stack-8957e5)](https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack)
 
@@ -80,7 +80,7 @@ Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover th
 
 ## Editions
 
-| | **Community** (this repo) | **Pro / Enterprise** |
+| | **Community** (this repo) | **Business** |
 |---|---|---|
 | AI | **Cloud** (any OpenAI-compatible endpoint) | **+ On-premise / local** (Ollama, llama.cpp, vLLM) |
 | Retrieval | Vector + metadata filtering | **+ Reranking, multimodal catalog RAG, trustworthy QC** |
@@ -88,7 +88,7 @@ Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover th
 | Training | Direct training | **+ Scheduling queue** |
 | Price | Free, Apache-2.0 | Commercial |
 
-> Need **local / on-prem AI, reranking, multimodal catalog RAG, or a cross-document knowledge graph**? Those are the paid tiers — [get in touch](https://github.com/TigerAI-Taiwan).
+> Need **local / on-prem AI, reranking, multimodal catalog RAG, or a cross-document knowledge graph**? Those are **TigerAI Advanced RAG Business** features — [get in touch](https://github.com/TigerAI-Taiwan).
 
 ## License
 
@@ -96,7 +96,7 @@ Prefer to drive it yourself? Follow **[INSTALL.md](INSTALL.md)** — discover th
 
 ### Trademark
 
-**TigerAI**, the TigerAI logo, and product names such as *TigerAI Advanced RAG* and *TigerAI Community Edition* are trademarks of **TigerAI Taiwan**. The Apache-2.0 license covers the **source code only** — it does not grant rights to the name or logo.
+**TigerAI**, the TigerAI logo, and product names such as *TigerAI Advanced RAG*, *TigerAI Advanced RAG Community*, and *TigerAI Advanced RAG Business* are trademarks of **TigerAI Taiwan**. The Apache-2.0 license covers the **source code only** — it does not grant rights to the name or logo.
 
 You can fork and build on this codebase freely; please rebrand if you redistribute a modified version commercially or host it as a paid service. See **[TRADEMARK.md](TRADEMARK.md)** for the full policy (it's short and friendly — same model as Kubernetes / Docker / Grafana / PostgreSQL).
 

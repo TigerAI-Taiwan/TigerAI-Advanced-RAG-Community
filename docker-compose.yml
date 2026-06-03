@@ -10,7 +10,7 @@ services:
     image: ${TIGERAI_IMAGE_PREFIX:-ghcr.io/tigerai-taiwan}/tigerai-rag-nginx:latest
     container_name: nginx
     ports:
-      - "${HOST_UI_PORT:-8088}:80"
+      - "${HOST_UI_PORT:-8888}:80"
     # v2026-05-30: load .env so the upstream HOST/PORT vars (FB_/N8N_/QDRANT_/
     # OWUI_/DOCLING_) reach the nginx:alpine entrypoint, which runs envsubst
     # on /etc/nginx/templates/default.conf.template at boot. Dockerfile sets

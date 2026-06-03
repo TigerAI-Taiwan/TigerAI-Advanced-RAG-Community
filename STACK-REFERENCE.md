@@ -190,7 +190,7 @@ python3 deploy_n8n.py --apply settings.json --import-workflows --edition communi
 | `PG_PASSWORD` | 預設 `tigerai`,正式環境會改 | `docker inspect postgres --format '{{.Config.Env}}'` 找 `POSTGRES_PASSWORD` |
 | `PG_USER` | OpenGenie 預設 `adm`(注意!不是 `postgres`) | 同上找 `POSTGRES_USER` |
 | `RAG_FILES_PATH` host 路徑 | 每台不同 | `docker inspect n8n-main --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}'` 找 `/home/node/.n8n-files` 的 Source |
-| `HOST_UI_PORT` | 8088 常被 cAdvisor 佔 | `ss -lnt | grep 8088` 或 `lsof -i:8088` |
+| `HOST_UI_PORT` | 預設 8888(不與 OpenGenie 衝突);8088 常被 cAdvisor 佔故已改 | `ss -lnt | grep 8888` |
 | n8n container 名(`n8n-main` vs `n8n` vs 其他) | 變體差異 | `docker ps | grep n8n` |
 | Docling container 名 | 多版本(intel/gpu/cpu) | `docker ps | grep docling` |
 | FileBrowser 有沒有裝 | OpenGenie 預設無 | `docker ps | grep -i file` |

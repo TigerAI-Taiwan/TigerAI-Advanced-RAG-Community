@@ -29,7 +29,7 @@ Upload PDFs → split → convert (Docling) → chunk + metadata/keywords → in
 
 ## How it fits with the OpenGenie AI Stack
 
-This app is the **application layer**; the [OpenGenie AI Stack](https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack) is the **infrastructure** underneath (n8n · Qdrant · Open WebUI · Docling · PostgreSQL · Redis · FileBrowser). Deploy OpenGenie first, then plug this in — see the **接上 OpenGenie** panel in the overview above. TigerAI RAG Community shows how the stack becomes a real, working product.
+This app is the **application layer**; the [OpenGenie AI Stack](https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack) is the **infrastructure** underneath (n8n · Qdrant · Open WebUI · Docling · PostgreSQL · Redis · FileBrowser). Deploy OpenGenie first, then plug this in — see the **Connect to OpenGenie** panel in the overview above. TigerAI RAG Community shows how the stack becomes a real, working product.
 
 ## What you can do
 

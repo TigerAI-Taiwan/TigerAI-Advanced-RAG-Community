@@ -44,8 +44,10 @@ services:
     # can tell when nginx is actually serving (not just process-up).
     # v1.0.20 2026-06-01: 用 -O /dev/null 取代 --spider(busybox wget --spider 對有 body
     # 的回應會誤判 → 假 unhealthy)。nginx:alpine 有 wget。
+    # v1.0.33 2026-06-06: localhost → 127.0.0.1(busybox wget 優先解析 IPv6 ::1,
+    #   但 nginx 只 listen IPv4 → Connection refused)。改打 /nginx-health 跳過靜態路由。
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -67,8 +69,9 @@ services:
       - stack
     # v1.0.15 2026-05-31: healthcheck against /health endpoint.
     # v1.0.20: -O /dev/null(node:alpine 有 wget,但 --spider 同樣 flaky)。
+    # v1.0.33 2026-06-06: localhost → 127.0.0.1(IPv6 優先問題同 nginx)。
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3060/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3060/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -106,7 +109,7 @@ services:
     # 用 wget → 永遠 unhealthy,假紅燈 + 卡住 depends_on: service_healthy 的 filebrowser)。
     # 改用 python 內建 urllib(image 一定有 python)。
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)\" || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -142,7 +145,7 @@ services:
       - stack
     # v1.0.15 2026-05-31: healthcheck via filebrowser /health endpoint.
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

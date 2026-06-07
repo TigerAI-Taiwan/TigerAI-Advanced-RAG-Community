@@ -12,6 +12,7 @@ An open-source RAG platform — and the **reference application** for the
 [![Edition](https://img.shields.io/badge/version-Community%20(free)-1a7f37)](#editions)
 [![Arch](https://img.shields.io/badge/image-amd64%20%7C%20arm64-555)](#quick-start)
 [![Reference app](https://img.shields.io/badge/reference%20app%20for-OpenGenie%20AI%20Stack-8957e5)](https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20579355.svg)](https://doi.org/10.5281/zenodo.20579355)
 
 [Quick Start](#quick-start) · [Agent install guide](AGENTS.md) · [Runbook](INSTALL.md) · [OpenGenie Stack](https://github.com/TigerAI-Taiwan/OpenGenie-AI-Stack)
 
